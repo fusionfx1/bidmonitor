@@ -43,7 +43,7 @@ export function BidDecisions() {
     {
       key: 'recommended_bid', label: 'Rec. Bid', align: 'right',
       render: (r) => r.recommended_bid != null
-        ? <span className="font-mono font-semibold text-blue-700">{fmtCurrency(r.recommended_bid, settings.currency)}</span>
+        ? <span className="font-mono font-semibold text-blue-700">${r.recommended_bid.toFixed(2)}</span>
         : <span className="text-gray-400">-</span>,
     },
     { key: 'cost', label: 'Cost', align: 'right', render: (r) => fmtCurrency(r.cost, settings.currency) },

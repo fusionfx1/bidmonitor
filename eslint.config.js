@@ -5,7 +5,24 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '.agents/**',
+      '.claude/**',
+      '.cursor/**',
+      '.obsidian/**',
+      '.projectmem/**',
+      '.serena/**',
+      '.taskmaster/**',
+      'backups/**',
+      'output/**',
+      'project-memory/.obsidian/**',
+      'supabase/.temp/**',
+      'supabase/.tmp-cli/**',
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

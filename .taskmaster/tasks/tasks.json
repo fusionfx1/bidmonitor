@@ -1,0 +1,898 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "Foundation: Data Contract (Sheet/Feed + DB Schema)",
+        "description": "Define and document stable Sheet/feed tabs, DB import fields, sync_log, audit_log, account config, and guardrail JSON that every downstream feature depends on. Must cover ALL datasets consumed by later tasks (PMax, geo, placements, budget pacing, Voluum true-profit). No UI, no writes enabled.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "details": "Owned by Agent A. Lock tab names and columns. Core raw tabs: raw_campaign_daily, raw_adgroup_daily, raw_keyword_daily, raw_search_term_daily, raw_hour_device, raw_policy. Extended raw tabs required by later tasks: raw_pmax_channel_daily, raw_pmax_terms_daily, raw_geo_daily, raw_placement_daily, raw_budget_daily, raw_conversion_action_daily, and a Voluum revenue/profit source (raw_voluum_revenue). Analysis tabs: analysis_campaign, analysis_keyword, analysis_search_terms, analysis_pmax, analysis_geo, analysis_placement, analysis_budget_pacing, analysis_profit. Control tabs: index, config, proposal_queue, sync_log, audit_log. Rules: dates YYYY-MM-DD; numeric metrics with no currency symbols; derived metrics computed from core metrics (not averaged from averages); stable IDs campaign_id/ad_group_id/criterion_id (+ geo/placement keys where relevant); identical headers every run. Provide migration notes and sample rows. Publish ALL field names early (including PMax/geo/placement/budget/Voluum) so no downstream agent has to guess schema.",
+        "testStrategy": "Contract/validator tests for every tab's names, headers, and types (including PMax/geo/placement/budget/Voluum). Import/export roundtrip on sample data. Schema migration dry-run. Verify no write/mutate path is enabled.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define core Sheet tabs and column contract",
+            "description": "Stable lowercase single-purpose tab names with fixed header sets for core raw_* and analysis_* tabs.",
+            "status": "pending",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Document each core tab's columns, types, and ID keys (campaign/adgroup/keyword/search-term/hour-device/policy). Enforce YYYY-MM-DD dates and numeric-only metric cells.",
+            "testStrategy": "Header/type validator tests; sample-row roundtrip.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Define sync_log and audit_log row schema",
+            "description": "Every script run writes timestamp, status, row counts, version, duration, error; audit rows are immutable.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "priority": "high",
+            "details": "Specify required columns and append-only semantics for audit_log.",
+            "testStrategy": "Insert sample rows; verify required fields and immutability assumptions.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Define account config and guardrail JSON",
+            "description": "Machine-readable rule config: target_cpa, min_clicks/cost, bid/budget caps, allow/deny labels, mode, freshness_minutes, timezones.",
+            "status": "pending",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Use the PRD JSON shape (account_timezone, tracker_timezone, mode=review_only, freshness_minutes=90, min_clicks_to_decide, min_cost_to_decide, target_cpa, max_bid_change_percent, max_budget_change_percent, max_actions_per_campaign_per_day, allow_shared_budget, campaign_allowlist_label, campaign_denylist_label).",
+            "testStrategy": "Config schema validation; default value tests.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Define freshness/stale calculation",
+            "description": "Compute stale when current time exceeds expected cadence + margin using freshness_minutes.",
+            "status": "pending",
+            "dependencies": [
+              3
+            ],
+            "priority": "high",
+            "details": "Shared helper consumed by dashboard, proposals, and executor guardrails.",
+            "testStrategy": "Unit tests across fresh/stale/edge timestamps and timezones.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 5,
+            "title": "Define PMax, Geo, Placement, Budget pacing, and Voluum/profit field contracts",
+            "description": "Lock schema for the datasets used by Keywords/PMax, Geo/Placements, Budget/Profit, and Insights so downstream agents do not invent fields.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "priority": "high",
+            "details": "Specify raw_pmax_channel_daily, raw_pmax_terms_daily, raw_geo_daily (country/state/city keys), raw_placement_daily (placement_id/url keys), raw_budget_daily, raw_conversion_action_daily, and raw_voluum_revenue (payout, true revenue, profit) plus their analysis_* derivatives and join keys back to campaign_id.",
+            "testStrategy": "Validator tests for each extended tab; join-key integrity tests against analysis_campaign.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 6,
+            "title": "Lock contract & publish worktree/branch policy (gating)",
+            "description": "Freeze the data contract and merge Agent A first so downstream agents branch from a locked base. Publish the worktree policy (see metadata.worktreePolicy).",
+            "status": "pending",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "priority": "high",
+            "details": "Tag/lock the contract version after subtasks 1.1-1.5 are accepted. Merge Agent A's branch to main BEFORE any heavy downstream work. Each Agent B-I must create a dedicated git worktree+branch off the locked main; merge one branch at a time only after its slice safety checkpoint passes; Agent G stays in a strict isolated worktree; Reviewer verifies from a clean worktree.",
+            "testStrategy": "Verify contract version tag exists; confirm downstream branches are created off locked base; checklist that worktree policy is published and acknowledged.",
+            "parentId": "undefined"
+          }
+        ],
+        "updatedAt": "2026-06-27T22:11:28.690Z"
+      },
+      {
+        "id": "2",
+        "title": "Settings & Script Health Page",
+        "description": "Build the Settings page: connected accounts, script version/update flow, data-source status, per-account mode/breakeven CPA, masked API keys, and danger zone (disable automation, rotate feed token, disconnect).",
+        "status": "done",
+        "dependencies": [
+          "1"
+        ],
+        "priority": "high",
+        "details": "Owned by Agent B. Account cards: name, customer ID, schedule, source count, data-updated/last-fetched time, script version, update status. Script update panel: current vs latest version, copy updated script, outdated warnings per account. Configure master Sheet URL, deployed web app URL, data source type. Per-account business mode (lead gen/ecommerce), breakeven CPA, currency. Mode selector (review_only default) and kill switch. Never expose feed tokens, Voluum secrets, service-role keys, or Google credentials in frontend.",
+        "testStrategy": "Mode change tests; copy-script update flow; verify no secrets present in frontend bundle; kill-switch state rendering.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Account cards: customer ID, source status, last fetched, script version",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Render per-account health using Data Contract freshness fields.",
+            "testStrategy": "Render tests with fresh/stale fixtures.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T22:36:35.762Z"
+          },
+          {
+            "id": 2,
+            "title": "Script update panel: current/latest/copy updated script",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "high",
+            "details": "Show version diff and copy-to-clipboard; flag outdated accounts.",
+            "testStrategy": "Outdated-warning logic tests; copy action test.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T22:36:35.769Z"
+          },
+          {
+            "id": 3,
+            "title": "Data source status: Google Sheet, Apps Script URL, Voluum health",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "medium",
+            "details": "Display source URLs/types and health without exposing secrets.",
+            "testStrategy": "Masking tests; health indicator states.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T22:36:35.771Z"
+          },
+          {
+            "id": 4,
+            "title": "Safety controls: mode, kill switch, token rotation placeholder",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "high",
+            "details": "Default review_only; danger zone for disable/rotate/disconnect.",
+            "testStrategy": "Default-mode assertion; danger-zone confirmation flow.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T22:36:35.776Z"
+          },
+          {
+            "id": 5,
+            "title": "Safety checkpoint (slice gate)",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "priority": "high",
+            "details": "Reviewer slice gate before merge: confirm no secrets in frontend bundle, default mode review_only, kill switch present. Feeds final gate (Task 10).",
+            "testStrategy": "Secret scan on this slice; default-mode + kill-switch assertions.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T22:36:35.779Z"
+          }
+        ],
+        "updatedAt": "2026-06-27T22:36:35.779Z"
+      },
+      {
+        "id": "3",
+        "title": "MCC Dashboard & Freshness Indicators",
+        "description": "All-account overview with summary cards, account table (sparkline + alerts), fresh/stale + sync indicators, and drill links. Includes Google/Voluum sync status and visible read-only action mode.",
+        "status": "done",
+        "dependencies": [
+          "1"
+        ],
+        "priority": "high",
+        "details": "Owned by Agent C. Summary cards: total cost, conversions, true revenue/value, CPA, ROI/ROAS, projected month spend, total alerts. Account table: name, 30-day sparkline, cost, conversions, value, CPA, ROI/ROAS, month projection, alerts, links. Top-right fresh/stale status; account search/filter. Alert badges drill into Quick Wins/Diagnostics. BitMonitor additions: Google sync (last run, rows, version, status), Voluum sync (last run, revenue freshness, token status), Action mode visible and read-only by default. Top bar shows account selector, freshness, refresh, settings, current mode.",
+        "testStrategy": "Data-driven card tests; stale-warning appears with old data; alert drill-through navigation; sparkline render tests.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Summary cards: cost, conv, revenue, CPA, ROI/ROAS, projected spend, alerts",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Each card: data point, meaning, recommended action, expected outcome.",
+            "testStrategy": "Card content tests from fixtures.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:07:40.909Z"
+          },
+          {
+            "id": 2,
+            "title": "Account table with sparkline and alert badges",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "high",
+            "details": "Dense sortable table; 30-day sparkline; alert badges.",
+            "testStrategy": "Sort/filter and badge tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:07:47.046Z"
+          },
+          {
+            "id": 3,
+            "title": "Fresh/stale and sync count indicators",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Google and Voluum sync status using freshness calc.",
+            "testStrategy": "Stale simulation tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:07:53.231Z"
+          },
+          {
+            "id": 4,
+            "title": "Drill links to diagnostics and remote updates",
+            "status": "done",
+            "dependencies": [
+              2
+            ],
+            "priority": "medium",
+            "details": "Alert badges navigate to Quick Wins/Diagnostics; pending actions to queue.",
+            "testStrategy": "Navigation tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:07:58.515Z"
+          },
+          {
+            "id": 5,
+            "title": "Safety checkpoint (slice gate)",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "priority": "high",
+            "details": "Reviewer slice gate: dashboard is read-only, stale data fails closed (no misleading green), no secrets exposed. Feeds final gate (Task 10).",
+            "testStrategy": "Stale fail-closed test; read-only assertion; secret scan.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:08:03.945Z"
+          }
+        ],
+        "updatedAt": "2026-06-27T23:08:03.945Z"
+      },
+      {
+        "id": "4",
+        "title": "Account Trends & Diagnostics (Moving Averages, Quick Wins, Debug Packet)",
+        "description": "Trends page with 7/28-day moving averages and pacing inputs, plus Diagnostics with week-over-week driver tree, auto insight, recommended action, AI/copy-prompt panel, Quick Wins checklist, and Generate Debug Packet.",
+        "status": "done",
+        "dependencies": [
+          "1"
+        ],
+        "priority": "medium",
+        "details": "Owned by Agent D. Trends: campaign selector + all-campaigns toggle; 7d/30d/90d/180d presets; metric cards (impressions, clicks, cost, conversions, value, CTR, CPA, CVR, ROI/ROAS); time-series chart with moving-average toggle; channel breakdown; daily table with CSV export. Compute 7/28-day MAs, crossover, spend pacing vs budget, days remaining, projected month-end, budget lost IS flag, winner/loser classification by true profit/CPA/data sufficiency. Diagnostics: WoW comparison cards, driver tree (impression share, impressions, CVR, conversions, CPA, spend, revenue/profit), Auto Insight, Recommended Action with risk, Copy Prompt, Quick Wins checklist. Debug Packet: script version, execution time, last logs, 3 sample rows, full error, timezone, config, expected outcome. If data insufficient, say 'not enough data' and show the sufficiency rule.",
+        "testStrategy": "Moving-average/pacing calculation unit tests with sample data; debug packet content tests; insufficient-data path tests; CSV export tests.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Campaign selector and all-campaigns toggle",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "Selector with combined toggle and date presets.",
+            "testStrategy": "Selector/toggle interaction tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:32:41.290Z"
+          },
+          {
+            "id": 2,
+            "title": "7d/30d/90d/180d trends with metric cards and chart",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "medium",
+            "details": "Time-series with raw line + MA toggle; channel breakdown.",
+            "testStrategy": "Chart data tests across presets.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:32:47.333Z"
+          },
+          {
+            "id": 3,
+            "title": "7/28-day moving average and pacing layer",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "MAs, crossover, pacing vs budget, projected month-end, winner/loser classification.",
+            "testStrategy": "Calculation unit tests; pacing forecast tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:32:52.852Z"
+          },
+          {
+            "id": 4,
+            "title": "Week-over-week diagnostic driver tree + auto insight",
+            "status": "done",
+            "dependencies": [
+              3
+            ],
+            "priority": "medium",
+            "details": "Driver tree and plain-language insight with risk level.",
+            "testStrategy": "Driver tree calc tests; insufficient-data messaging.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:39:43.977Z"
+          },
+          {
+            "id": 5,
+            "title": "Quick Wins audit cards",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "priority": "medium",
+            "details": "Performance drops, geo, search partners, display-on-search, budget limits, disapproved ads, empty ad groups, LP/tracking health.",
+            "testStrategy": "Checklist rule tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:39:49.171Z"
+          },
+          {
+            "id": 6,
+            "title": "Copy debug/AI packet",
+            "status": "done",
+            "dependencies": [
+              5
+            ],
+            "priority": "medium",
+            "details": "Package version, logs, sample rows, config, expected outcome for external analysis.",
+            "testStrategy": "Packet content snapshot/validation.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:39:54.243Z"
+          },
+          {
+            "id": 7,
+            "title": "Safety checkpoint (slice gate)",
+            "status": "done",
+            "dependencies": [
+              6
+            ],
+            "priority": "high",
+            "details": "Reviewer slice gate: insufficient-data shows 'not enough data' (no invented insight), debug packet contains no secrets. Feeds final gate (Task 10).",
+            "testStrategy": "Insufficient-data path test; packet secret scan.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:39:59.248Z"
+          }
+        ],
+        "updatedAt": "2026-06-27T23:39:59.248Z"
+      },
+      {
+        "id": "5",
+        "title": "Keywords / Search Terms / PMax / N-Grams Views",
+        "description": "Tabbed analysis for Keywords, Search Terms, PMax categories/terms, and N-grams with filters, multiple views, badges, and proposal/export-only candidates (not applied via remote pipeline in v1) plus CSV export.",
+        "status": "done",
+        "dependencies": [
+          "1"
+        ],
+        "priority": "medium",
+        "details": "Owned by Agent E. Tabs: Keywords, Search Terms, PMax Categories, PMax Terms, N-grams. Filters: date range, campaign, text, cost/clicks/conversion/CTR/CVR thresholds. Views: tree, table, n-gram, treemap. Badges: top 10/5, wasted spend, low data, conflict. Actions are candidate/export-only: add negative-keyword candidate, pause candidate, increase/decrease bid candidate, export CSV. IMPORTANT SCOPE: these candidates are surfaced for human review/export ONLY. They are NOT part of the Task 7 remote-apply pipeline in v1 (which applies only SET_BUDGET, PAUSE_CAMPAIGN, ENABLE_CAMPAIGN, SET_CAMPAIGN_LABEL). Negative-keyword and bid application are explicitly out of v1 remote-apply scope (proposal-first, later phase). Lead-gen adaptation: replace SKU logic with intent groups (brand, competitor, generic, high/low intent, location, question, irrelevant). Implement entity bucket matrix (Profitable, Costly, Fluke, Meh, Zero Conv, Low Data) feeding Quick Wins and the proposal queue (review-only).",
+        "testStrategy": "Filter/view tests; wasted/zero-conv summary tests; candidate generation/export flow test (verify no remote-apply path); CSV export verification.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Tabs and filters",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "Tab routing and threshold filters above tables/charts.",
+            "testStrategy": "Filter application tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:50:12.664Z"
+          },
+          {
+            "id": 2,
+            "title": "Tree/table/n-gram/treemap views",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "medium",
+            "details": "Switchable views with badges.",
+            "testStrategy": "View render tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:50:18.826Z"
+          },
+          {
+            "id": 3,
+            "title": "Wasted spend and zero-conv summaries + bucket matrix",
+            "status": "done",
+            "dependencies": [
+              2
+            ],
+            "priority": "medium",
+            "details": "Entity bucket matrix counts feed Quick Wins/proposals.",
+            "testStrategy": "Bucket classification tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:50:23.991Z"
+          },
+          {
+            "id": 4,
+            "title": "Negative-keyword / bid candidates (review/export-only, not v1 remote-apply)",
+            "status": "done",
+            "dependencies": [
+              3
+            ],
+            "priority": "medium",
+            "details": "Generate candidates for human review and CSV export only. Must NOT write to the Task 7 remote-apply feed. Clearly label as proposal-first / later-phase for any apply.",
+            "testStrategy": "Verify candidates never enter remote-apply feed; export-only flow test.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:50:33.588Z"
+          },
+          {
+            "id": 5,
+            "title": "CSV export",
+            "status": "done",
+            "dependencies": [
+              2
+            ],
+            "priority": "low",
+            "details": "Stable headers matching data contract.",
+            "testStrategy": "Export header/roundtrip test.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:50:41.307Z"
+          },
+          {
+            "id": 6,
+            "title": "Safety checkpoint (slice gate)",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "priority": "high",
+            "details": "Reviewer slice gate: confirm negative/bid candidates are review/export-only and have no remote-apply path in v1. Feeds final gate (Task 10).",
+            "testStrategy": "Static check for absence of feed-write from this slice.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-27T23:50:49.432Z"
+          }
+        ],
+        "updatedAt": "2026-06-27T23:50:49.432Z"
+      },
+      {
+        "id": "6",
+        "title": "Budget Pacing, Optimization & Profit Curve",
+        "description": "Budget page (pacing, forecast, utilization), Optimization page (presets/sliders, projected impact, proposals only), and Profit Curve/ProfitMax using Voluum true-profit inputs.",
+        "status": "done",
+        "dependencies": [
+          "1"
+        ],
+        "priority": "medium",
+        "details": "Owned by Agent F. Budget: month progress %, variance vs configured budget, next-30-day forecast, campaign status (over/on track/under), daily spend chart with historical+forecast, pacing table (daily budget, 30-day daily avg, month projection, next-30 projection, utilization, status, recommended budget). Optimization: Conservative/Balanced/Aggressive/None presets, per-campaign sliders, projected impact, reason per action, NO mutation (write proposals only while review_only). Profit Curve: campaign selector, response model (diminishing/linear/independent), sliders for spend/revenue/COGS or payout, profit vs cost chart with optimal zone, CPA/ROI/marginal charts, current status, profit zones table. Lead-gen: use payout, true Voluum revenue, target/breakeven CPA, lead value.",
+        "testStrategy": "Pacing projection tests; profit model validation; verify optimization writes proposals only (no mutation).",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Budget pacing cards and forecast chart",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "Month progress, variance, 30-day forecast, status.",
+            "testStrategy": "Forecast calc tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:01:23.966Z"
+          },
+          {
+            "id": 2,
+            "title": "Campaign budget pacing table",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "medium",
+            "details": "Utilization and recommended budget per campaign.",
+            "testStrategy": "Projection/utilization tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:01:30.387Z"
+          },
+          {
+            "id": 3,
+            "title": "Optimization sliders and presets",
+            "status": "done",
+            "dependencies": [
+              2
+            ],
+            "priority": "medium",
+            "details": "Presets + sliders produce SET_BUDGET proposals only (aligned with Task 7 v1 allowed actions).",
+            "testStrategy": "No-mutation assertion; proposal write test.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:01:35.921Z"
+          },
+          {
+            "id": 4,
+            "title": "Profit curve and breakeven CPA model",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "Optimal zone, marginal CPA/ROI, current status.",
+            "testStrategy": "Profit model validation tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:01:41.955Z"
+          },
+          {
+            "id": 5,
+            "title": "Voluum true-profit integration points",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "priority": "medium",
+            "details": "Payout/true revenue inputs from raw_voluum_revenue/analysis_profit; no secrets in frontend.",
+            "testStrategy": "Integration boundary tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:01:47.665Z"
+          },
+          {
+            "id": 6,
+            "title": "Safety checkpoint (slice gate)",
+            "status": "done",
+            "dependencies": [
+              3
+            ],
+            "priority": "high",
+            "details": "Reviewer slice gate: optimization writes proposals only (no mutation), Voluum secrets not exposed. Feeds final gate (Task 10).",
+            "testStrategy": "No-mutation assertion; Voluum secret scan.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:01:53.792Z"
+          }
+        ],
+        "updatedAt": "2026-06-28T00:01:53.792Z"
+      },
+      {
+        "id": "7",
+        "title": "Remote Campaign Updates: Proposal Queue, Feed, Guardrails & Audit",
+        "description": "Proposal queue UI and safe execution model where the dashboard prepares campaign updates but only the in-account Google Ads Script applies them via a token-guarded feed. v1 apply scope is limited to SET_BUDGET, PAUSE_CAMPAIGN, ENABLE_CAMPAIGN, SET_CAMPAIGN_LABEL. Includes guardrails, dry-run, audit states, rollback, and kill switch.",
+        "status": "done",
+        "dependencies": [
+          "1",
+          "2",
+          "6"
+        ],
+        "priority": "high",
+        "details": "Owned by Agent G. Flow: dashboard creates proposal -> approve/queue -> server writes token-guarded feed row -> in-account script polls -> re-checks live state -> apply/skip -> posts result to bid_action_log. Supported v1 APPLY actions: SET_BUDGET, PAUSE_CAMPAIGN, ENABLE_CAMPAIGN, SET_CAMPAIGN_LABEL. Explicitly OUT of v1 apply scope (proposal-first / later phase only): SET_BID_STRATEGY_TARGET, negative-keyword application, bid changes, schedule/device/geo modifiers. Candidates from Task 5 (negative-keyword/bid) are review/export-only and must NOT be written to this apply feed in v1. Not allowed v1: create campaigns/ads, broad keywords, auto-apply Google recs, change conversion tracking, billing, update without stable campaign_id, shared budgets unless allow_shared_budget. UI: queue with action, old->new, reason, risk, guardrail result, expiry, approval status, result; dry-run preview; per-action rollback; Copy Debug Packet; global kill switch in header. Guardrails (server + script): review_only default, allowlist required, denylist wins, max budget change %, max actions/campaign/day, max total budget delta/day, stale data fails closed, optimistic concurrency skip on drift. States: ready, approved, dry_run, applied, skipped_stale_data, skipped_guardrail, skipped_campaign_changed, skipped_shared_budget, skipped_not_allowlisted, skipped_denylisted, not_found, failed, rolled_back. NO Google OAuth/API in BitMonitor; no browser/backend mutation of Google Ads.",
+        "testStrategy": "Full dry-run-to-apply simulation; guardrail fail-closed tests; concurrency drift skip test; audit completeness; verify only the 4 v1 actions can be applied and bid/negative actions are rejected from apply; verify no OAuth/API path and kill switch blocks all updates even with feed rows.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Proposal queue schema/UI",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Entity level, account/campaign, old->new, reason, data sufficiency, risk, approval, expiry, proposal hash, last live value, result.",
+            "testStrategy": "Schema/UI render tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:22:29.865Z"
+          },
+          {
+            "id": 2,
+            "title": "Supported v1 apply actions: SET_BUDGET, PAUSE/ENABLE_CAMPAIGN, SET_CAMPAIGN_LABEL",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "high",
+            "details": "Restrict apply pipeline to the 4 v1 actions only; reject bid/negative/strategy/modifier applies (proposal-first).",
+            "testStrategy": "Disallowed-action rejection tests (incl. bid/negative-keyword).",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:22:38.044Z"
+          },
+          {
+            "id": 3,
+            "title": "Guardrail engine: allowlist, denylist, max delta, max actions, stale fail-closed",
+            "status": "done",
+            "dependencies": [
+              2
+            ],
+            "priority": "high",
+            "details": "Server-side and script-side checks; denylist always wins.",
+            "testStrategy": "Guardrail unit tests; stale fail-closed test.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:22:46.087Z"
+          },
+          {
+            "id": 4,
+            "title": "Feed contract for Google Ads Script",
+            "status": "done",
+            "dependencies": [
+              3
+            ],
+            "priority": "high",
+            "details": "Token-guarded feed rows; script polls and re-checks live state.",
+            "testStrategy": "Feed read/skip simulation.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:22:55.952Z"
+          },
+          {
+            "id": 5,
+            "title": "Result/audit states and rollback data",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "priority": "high",
+            "details": "Immutable audit row per apply/skip/fail; rollback metadata for reversible actions.",
+            "testStrategy": "Audit completeness and rollback tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:23:01.729Z"
+          },
+          {
+            "id": 6,
+            "title": "Dry-run preview and kill switch",
+            "status": "done",
+            "dependencies": [
+              5
+            ],
+            "priority": "high",
+            "details": "Dry-run before apply; global kill switch prevents all updates.",
+            "testStrategy": "Kill-switch blocks despite feed rows.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T00:23:09.239Z"
+          },
+          {
+            "id": 7,
+            "title": "Safety checkpoint (slice gate)",
+            "status": "done",
+            "dependencies": [
+              6
+            ],
+            "priority": "high",
+            "details": "Reviewer slice gate: only 4 v1 actions appliable, no OAuth/API path, no browser/backend Google mutation, kill switch + stale fail-closed verified. Feeds final gate (Task 10).",
+            "testStrategy": "OAuth/API static scan; action-allowlist test; kill-switch + fail-closed tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:22:27.509Z"
+          }
+        ],
+        "updatedAt": "2026-06-28T03:22:27.509Z"
+      },
+      {
+        "id": "8",
+        "title": "Insights Prompt Library",
+        "description": "Searchable prompt-card library (not a chat box) that generates context-rich, safety-constrained prompts citing supplied metrics. AI drafts only; never applies actions.",
+        "status": "done",
+        "dependencies": [
+          "1",
+          "4"
+        ],
+        "priority": "medium",
+        "details": "Owned by Agent H (independent, parallel after Agent A). Prompt cards (e.g., Smart Bidding Analysis, Campaign Scaling Readiness, Negative Keyword Identification, Keyword/Search Term N-gram Analysis, ROAS/CPA Maximization, Budget Optimization, Performance Trend/Period Comparison, Geo Performance, Landing Page Improvement, etc.). Each card: category tag, required data source, what it answers, Use Prompt button. Generated prompt includes account context, date range, metric table, freshness, and safety constraints. Rules: prompts can analyze/recommend but cannot apply actions; output must be reviewable and cite supplied metrics.",
+        "testStrategy": "Prompt generation snapshot/validation; search/category filter tests; verify safety constraints and metric citations are injected.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Prompt card taxonomy",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "Categorize cards by bidding, search terms, PMax, campaigns, trends, keywords, conversions, geo, creative.",
+            "testStrategy": "Taxonomy completeness test.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:26:55.328Z"
+          },
+          {
+            "id": 2,
+            "title": "Search and category filters",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "priority": "medium",
+            "details": "Searchable, filterable card grid.",
+            "testStrategy": "Filter/search tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:26:59.162Z"
+          },
+          {
+            "id": 3,
+            "title": "Prompt generator with context, date range, freshness, safety rules",
+            "status": "done",
+            "dependencies": [
+              2
+            ],
+            "priority": "medium",
+            "details": "Inject account context, metric table, freshness, and constraints.",
+            "testStrategy": "Generated-prompt snapshot tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:27:02.732Z"
+          },
+          {
+            "id": 4,
+            "title": "Copy prompt action",
+            "status": "done",
+            "dependencies": [
+              3
+            ],
+            "priority": "low",
+            "details": "Copy generated prompt to clipboard.",
+            "testStrategy": "Copy action test.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:27:07.449Z"
+          },
+          {
+            "id": 5,
+            "title": "Safety checkpoint (slice gate)",
+            "status": "done",
+            "dependencies": [
+              3
+            ],
+            "priority": "high",
+            "details": "Reviewer slice gate: prompts cannot apply actions, output cites supplied metrics only, safety constraints injected. Feeds final gate (Task 10).",
+            "testStrategy": "No-apply-path test; constraint-injection assertion.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:41:30.742Z"
+          }
+        ],
+        "updatedAt": "2026-06-28T03:41:30.742Z"
+      },
+      {
+        "id": "9",
+        "title": "MCC Trends, Allocation, Geo, Placements & Advanced Views",
+        "description": "Dedicated MCC-level and account advanced pages not covered elsewhere: MCC Trends, Allocation, Geo, Placements, Treemap, and Products/Buckets. Restores the advanced-views scope from the prior plan.",
+        "status": "done",
+        "dependencies": [
+          "1",
+          "3"
+        ],
+        "priority": "medium",
+        "details": "Cross-account MCC Trends and moving averages; Allocation across accounts/campaign groups; Account Geo page (country/state/city performance, geo expansion/exclusion candidates as proposal-only); Placements page (PMax/YouTube/display placement performance and exclusion candidates, proposal-only); Treemap (cost/CPA/profit allocation by campaign/ad group/keyword/search term); Products/Buckets entity matrix view if not fully delivered in Task 5. Uses analysis_geo, analysis_placement, analysis_pmax, and analysis_campaign from the data contract. Geo/placement exclusions are proposal-first only (not in Task 7 v1 apply scope).",
+        "testStrategy": "Cross-page navigation and data consistency tests; geo/placement aggregation tests; verify exclusion actions are proposal-only (no remote-apply in v1).",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "MCC Trends and Allocation",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "Cross-account trends, moving averages, and budget allocation views.",
+            "testStrategy": "Aggregation/consistency tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:47:48.023Z"
+          },
+          {
+            "id": 2,
+            "title": "Geo views and exclusion candidates",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "Country/state/city performance; geo expansion/exclusion as proposal-only.",
+            "testStrategy": "Geo aggregation tests; proposal-only assertion.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:47:48.052Z"
+          },
+          {
+            "id": 3,
+            "title": "Placements views and exclusion candidates",
+            "status": "done",
+            "dependencies": [],
+            "priority": "medium",
+            "details": "PMax/YouTube/display placement performance; exclusion candidates proposal-only.",
+            "testStrategy": "Placement aggregation tests; proposal-only assertion.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:47:48.174Z"
+          },
+          {
+            "id": 4,
+            "title": "Treemap and Products/Buckets advanced view",
+            "status": "done",
+            "dependencies": [],
+            "priority": "low",
+            "details": "Treemap allocation and entity bucket matrix surfacing.",
+            "testStrategy": "Treemap render and bucket-count tests.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T03:47:48.220Z"
+          },
+          {
+            "id": 5,
+            "title": "Safety checkpoint (slice gate)",
+            "status": "done",
+            "dependencies": [
+              2,
+              3
+            ],
+            "priority": "high",
+            "details": "Reviewer slice gate: geo/placement exclusions are proposal-only (no v1 remote-apply), read-only views. Feeds final gate (Task 10).",
+            "testStrategy": "Proposal-only static check; read-only assertion.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T04:01:52.581Z"
+          }
+        ],
+        "updatedAt": "2026-06-28T04:01:52.581Z"
+      },
+      {
+        "id": "10",
+        "title": "Safety Review & Final Release Gate",
+        "description": "Final cross-cutting release gate that aggregates the per-task safety checkpoints and runs full lint/typecheck/build/test before owner sign-off. Per-slice safety is enforced by the safety-checkpoint subtask in each task; this task is the final gate, not the only review.",
+        "status": "done",
+        "dependencies": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ],
+        "priority": "high",
+        "details": "Owned by Reviewer. NOTE: Reviewer also runs the per-slice safety checkpoints embedded in Tasks 2-9 as each slice merges; this Task 10 is the FINAL aggregate gate. Verify against .repo-plugins/safety-policy.md and harness/SAFETY_GATE. Findings-first reporting. Confirm: no Google OAuth/API credentials added; no Google Ads mutation from browser/backend; default mode review_only; only the 4 v1 remote-apply actions exist (no bid/negative/strategy apply); no exposed Voluum/feed/service-role secrets in frontend bundle; stale Google/Voluum data fails closed; kill switch present and effective. Produce final owner report listing changed files and confirming read-only/review-only default.",
+        "testStrategy": "Static scan for OAuth/API path and frontend tokens; security scan; full test suite + build; immutable audit verification; confirm all per-slice safety checkpoints passed; owner sign-off simulation.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Verify default mode is review_only",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Assert default config and UI mode are review_only.",
+            "testStrategy": "Config/UI default assertion.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T04:26:04.047Z"
+          },
+          {
+            "id": 2,
+            "title": "Verify no Google OAuth/API path and only v1 apply actions",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Static scan for OAuth/Ads API usage; confirm only SET_BUDGET/PAUSE/ENABLE/SET_LABEL appliable.",
+            "testStrategy": "Static analysis pass; action-allowlist audit.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T04:26:04.049Z"
+          },
+          {
+            "id": 3,
+            "title": "Verify no frontend secrets",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "Scan bundle for feed tokens, Voluum/service-role keys.",
+            "testStrategy": "Secret scan on built frontend.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T04:26:04.052Z"
+          },
+          {
+            "id": 4,
+            "title": "Aggregate per-slice safety checkpoints",
+            "status": "done",
+            "dependencies": [
+              1,
+              2,
+              3
+            ],
+            "priority": "high",
+            "details": "Confirm safety-checkpoint subtasks in Tasks 2-9 all passed.",
+            "testStrategy": "Checkpoint completion audit.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T04:26:04.055Z"
+          },
+          {
+            "id": 5,
+            "title": "Run lint/typecheck/build/tests",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "priority": "high",
+            "details": "Full quality gate before release.",
+            "testStrategy": "CI gate green.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T04:26:04.057Z"
+          },
+          {
+            "id": 6,
+            "title": "Produce final owner report",
+            "status": "done",
+            "dependencies": [
+              5
+            ],
+            "priority": "high",
+            "details": "List changed files; confirm read-only/review-only default and safety findings.",
+            "testStrategy": "Report completeness review.",
+            "parentId": "undefined",
+            "updatedAt": "2026-06-28T04:26:04.060Z"
+          }
+        ],
+        "updatedAt": "2026-06-28T04:26:04.060Z"
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-06-28T04:26:04.060Z",
+      "taskCount": 10,
+      "completedCount": 10,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}

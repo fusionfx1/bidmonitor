@@ -2,6 +2,7 @@ import type {
   ImportedData, DataTableKey, TableMeta,
   CampaignRow, AdGroupRow, KeywordRow, SearchTermRow, HourDeviceRow,
   PolicyRow, AuctionCampaignRow, AuctionKeywordRow, VoluumRow, GoogleSyncLogRow,
+  PmaxPerformanceRow, GeoPerformanceRow, PlacementPerformanceRow,
   ApprovalStatus,
 } from '../types';
 
@@ -19,6 +20,9 @@ const EMPTY_DATA: ImportedData = {
   policy: [],
   auctionCampaigns: [],
   auctionKeywords: [],
+  pmaxPerformance: [],
+  geoPerformance: [],
+  placementPerformance: [],
   voluum: [],
   syncLog: [],
   meta: {},
@@ -107,5 +111,8 @@ export function getHourDevice(): HourDeviceRow[] { return loadData().hourDevice;
 export function getPolicyRows(): PolicyRow[] { return loadData().policy; }
 export function getAuctionCampaigns(): AuctionCampaignRow[] { return loadData().auctionCampaigns; }
 export function getAuctionKeywords(): AuctionKeywordRow[] { return loadData().auctionKeywords; }
+export function getPmaxPerformance(): PmaxPerformanceRow[] { return loadData().pmaxPerformance ?? []; }
+export function getGeoPerformance(): GeoPerformanceRow[] { return loadData().geoPerformance ?? []; }
+export function getPlacementPerformance(): PlacementPerformanceRow[] { return loadData().placementPerformance ?? []; }
 export function getVoluumRows(): VoluumRow[] { return loadData().voluum; }
 export function getSyncLog(): GoogleSyncLogRow[] { return loadData().syncLog; }

@@ -1,6 +1,9 @@
 // ─── Raw Data Row Types ──────────────────────────────────────────────────────
 
 export interface CampaignRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   date: string;
   campaign_id: string;
   campaign_name: string;
@@ -22,6 +25,9 @@ export interface CampaignRow {
 }
 
 export interface AdGroupRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   date: string;
   campaign_id: string;
   campaign_name: string;
@@ -41,6 +47,9 @@ export interface AdGroupRow {
 }
 
 export interface KeywordRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   date: string;
   device: string;
   keyword_key: string;
@@ -65,6 +74,9 @@ export interface KeywordRow {
 }
 
 export interface SearchTermRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   date: string;
   campaign_id: string;
   campaign_name: string;
@@ -83,6 +95,9 @@ export interface SearchTermRow {
 }
 
 export interface HourDeviceRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   date: string;
   hour: number;
   device: string;
@@ -99,6 +114,9 @@ export interface HourDeviceRow {
 }
 
 export interface PolicyRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   campaign_id: string;
   campaign_name: string;
   ad_group_id: string;
@@ -111,6 +129,9 @@ export interface PolicyRow {
 }
 
 export interface AuctionCampaignRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   date: string;
   campaign_id: string;
   campaign_name: string;
@@ -133,6 +154,9 @@ export interface AuctionCampaignRow {
 }
 
 export interface AuctionKeywordRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   date: string;
   keyword_key: string;
   campaign_id: string;
@@ -158,6 +182,9 @@ export interface AuctionKeywordRow {
 }
 
 export interface VoluumRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   date: string;
   keyword_key: string;
   campaign_id: string;
@@ -174,6 +201,9 @@ export interface VoluumRow {
 export type SyncLogStatus = 'SUCCESS' | 'PARTIAL' | 'FAILED';
 
 export interface GoogleSyncLogRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
   run_id: string;
   started_at: string;
   finished_at: string;
@@ -193,6 +223,70 @@ export interface GoogleSyncLogRow {
   voluum_rows: number;
   error_message: string;
   script_version: string;
+}
+
+export interface PmaxPerformanceRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
+  date: string;
+  campaign_id: string;
+  campaign_name: string;
+  asset_group_id: string;
+  asset_group_name: string;
+  asset_id: string;
+  asset_type: string;
+  listing_group_filter: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  conversions: number;
+  conversion_value: number;
+  asset_signal: string;
+  review_status: ApprovalStatus;
+}
+
+export interface GeoPerformanceRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
+  date: string;
+  campaign_id: string;
+  campaign_name: string;
+  country_criterion_id: string;
+  country_code: string;
+  region: string;
+  city: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  conversions: number;
+  conversion_value: number;
+  profit: number;
+  roi: number;
+  geo_signal: string;
+  review_status: ApprovalStatus;
+}
+
+export interface PlacementPerformanceRow {
+  account_id?: string;
+  customer_id?: string;
+  source_sheet_id?: string;
+  date: string;
+  campaign_id: string;
+  campaign_name: string;
+  ad_group_id: string;
+  ad_group_name: string;
+  placement: string;
+  placement_type: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  conversions: number;
+  conversion_value: number;
+  profit: number;
+  placement_signal: string;
+  review_status: ApprovalStatus;
 }
 
 // ─── Derived / Computed Types ────────────────────────────────────────────────
@@ -310,8 +404,100 @@ export interface VoluumMismatchRow {
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 
-export type ActionMode = 'review_only' | 'semi_auto_ready' | 'disabled';
+export type ActionMode = 'disabled' | 'review_only' | 'dry_run' | 'manual_apply';
 export type SheetAutoRefresh = 'off' | '15min' | '1hour';
+
+export type BidActionEntityLevel = 'campaign';
+export type BidActionFeedAction = 'SET_BUDGET' | 'PAUSE_CAMPAIGN' | 'ENABLE_CAMPAIGN' | 'SET_CAMPAIGN_LABEL';
+export type BidActionFeedMode = 'dry_run';
+export type BidActionFeedStatus = 'ready' | 'applied' | 'failed' | 'skipped' | 'stale';
+
+export interface AutoBidGuardrails {
+  minBid: number;
+  maxBid: number;
+  maxChangePercent: number;
+  minBudget: number;
+  maxBudget: number;
+  maxBudgetChangePercent: number;
+  allowSharedBudget: boolean;
+  maxChangesPerRun: number;
+  dryRun: boolean;
+  applyEnabled: boolean;
+}
+
+export interface AccountSource {
+  id: string;
+  account_id: string;
+  customer_id: string;
+  account_name: string;
+  spreadsheet_id: string;
+  spreadsheet_url: string;
+  sheet_tab_name: string;
+  timezone: string;
+  currency: string;
+  enabled: boolean;
+}
+
+export interface BidActionFeedRow {
+  id: string;
+  account_id: string;
+  customer_id: string;
+  source_sheet_id: string;
+  entity_level: BidActionEntityLevel;
+  keyword_key: string | null;
+  campaign_id: string;
+  ad_group_id: string | null;
+  criterion_id: string | null;
+  campaign_name: string | null;
+  ad_group_name: string | null;
+  keyword: string | null;
+  match_type: string | null;
+  action: BidActionFeedAction;
+  expected_current_bid: number | null;
+  target_bid: number | null;
+  expected_current_budget: number | null;
+  target_budget: number | null;
+  budget_is_shared: boolean | null;
+  reason: string | null;
+  mode: BidActionFeedMode;
+  status: BidActionFeedStatus;
+  created_at: string | null;
+  picked_at: string | null;
+  applied_at: string | null;
+}
+
+export type BidActionLogResult =
+  | 'applied'
+  | 'dry_run'
+  | 'failed'
+  | 'skipped'
+  | 'skipped_smart_bidding'
+  | 'skipped_bid_changed'
+  | 'skipped_budget_changed'
+  | 'skipped_shared_budget'
+  | 'skipped_max_changes'
+  | 'stale'
+  | 'not_found'
+  | 'error';
+
+export interface BidActionLogRow {
+  id: string;
+  feed_id: string | null;
+  account_id: string;
+  customer_id: string;
+  source_sheet_id: string;
+  entity_level: BidActionEntityLevel | null;
+  keyword_key: string | null;
+  campaign_id: string | null;
+  action: BidActionFeedAction | null;
+  mode: BidActionFeedMode | null;
+  old_value: number | null;
+  new_value: number | null;
+  result: BidActionLogResult;
+  message: string | null;
+  script_version: string | null;
+  created_at: string | null;
+}
 
 export interface Settings {
   payout: number;
@@ -326,9 +512,27 @@ export interface Settings {
   max_daily_loss: number;
   currency: string;
   action_mode: ActionMode;
+  auto_bid_guardrails: AutoBidGuardrails;
+  account_sources: AccountSource[];
+  selected_account_source_id: string;
+  account_id: string;
+  customer_id: string;
   sheet_id: string;
   sheet_auto_refresh: SheetAutoRefresh;
 }
+
+export const DEFAULT_AUTO_BID_GUARDRAILS: AutoBidGuardrails = {
+  minBid: 0.01,
+  maxBid: 2.0,
+  maxChangePercent: 25,
+  minBudget: 1,
+  maxBudget: 200,
+  maxBudgetChangePercent: 30,
+  allowSharedBudget: false,
+  maxChangesPerRun: 50,
+  dryRun: true,
+  applyEnabled: false,
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   payout: 35,
@@ -343,6 +547,11 @@ export const DEFAULT_SETTINGS: Settings = {
   max_daily_loss: 100,
   currency: 'THB',
   action_mode: 'review_only',
+  auto_bid_guardrails: { ...DEFAULT_AUTO_BID_GUARDRAILS },
+  account_sources: [],
+  selected_account_source_id: '',
+  account_id: '',
+  customer_id: '',
   sheet_id: '',
   sheet_auto_refresh: 'off',
 };
@@ -384,6 +593,9 @@ export interface ImportedData {
   policy: PolicyRow[];
   auctionCampaigns: AuctionCampaignRow[];
   auctionKeywords: AuctionKeywordRow[];
+  pmaxPerformance?: PmaxPerformanceRow[];
+  geoPerformance?: GeoPerformanceRow[];
+  placementPerformance?: PlacementPerformanceRow[];
   voluum: VoluumRow[];
   syncLog: GoogleSyncLogRow[];
   meta: Partial<Record<DataTableKey, TableMeta>>;
@@ -398,6 +610,9 @@ export type DataTableKey =
   | 'policy'
   | 'auctionCampaigns'
   | 'auctionKeywords'
+  | 'pmaxPerformance'
+  | 'geoPerformance'
+  | 'placementPerformance'
   | 'voluum'
   | 'syncLog';
 

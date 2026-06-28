@@ -1,8 +1,10 @@
 import type { DataTableKey } from '../types';
+import { getCurrentImportTabs } from './dataContract/contract';
 import {
   parseCampaigns, parseAdGroups, parseKeywords, parseSearchTerms,
   parseHourDevice, parsePolicy, parseAuctionCampaigns, parseAuctionKeywords,
   parseVoluum, parseSyncLog,
+  parsePmaxPerformance, parseGeoPerformance, parsePlacementPerformance,
 } from './csv/parser';
 
 export interface SheetTab {
@@ -12,18 +14,12 @@ export interface SheetTab {
   optional?: boolean;
 }
 
-export const SHEET_TABS: SheetTab[] = [
-  { tabName: 'google_campaigns',               key: 'campaigns',        label: 'Campaigns' },
-  { tabName: 'google_adgroups',                key: 'adGroups',         label: 'Ad Groups' },
-  { tabName: 'google_keywords',                key: 'keywords',         label: 'Keywords' },
-  { tabName: 'google_search_terms',            key: 'searchTerms',      label: 'Search Terms' },
-  { tabName: 'google_hour_device',             key: 'hourDevice',       label: 'Hour / Device' },
-  { tabName: 'google_ads_policy',              key: 'policy',           label: 'Policy Issues' },
-  { tabName: 'google_auction_proxy_campaigns', key: 'auctionCampaigns', label: 'Auction Signals (Campaign)' },
-  { tabName: 'google_auction_proxy_keywords',  key: 'auctionKeywords',  label: 'Auction Signals (Keywords)' },
-  { tabName: 'voluum_performance',             key: 'voluum',           label: 'Voluum Performance', optional: true },
-  { tabName: 'google_sync_log',                key: 'syncLog',          label: 'Script Run Log',     optional: true },
-];
+export const SHEET_TABS: SheetTab[] = getCurrentImportTabs().map((tab) => ({
+  tabName: tab.tabName,
+  key: tab.key,
+  label: tab.label,
+  optional: tab.optional,
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const SHEET_PARSERS: Record<DataTableKey, (rows: any[]) => any[]> = {
@@ -35,6 +31,9 @@ export const SHEET_PARSERS: Record<DataTableKey, (rows: any[]) => any[]> = {
   policy:           parsePolicy,
   auctionCampaigns: parseAuctionCampaigns,
   auctionKeywords:  parseAuctionKeywords,
+  pmaxPerformance:  parsePmaxPerformance,
+  geoPerformance:   parseGeoPerformance,
+  placementPerformance: parsePlacementPerformance,
   voluum:           parseVoluum,
   syncLog:          parseSyncLog,
 };

@@ -5,14 +5,18 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+dev-debug.log
 
 node_modules
+node_modules/
 dist
 dist-ssr
 *.local
+.env
 
 .vscode/*
 !.vscode/extensions.json
+.vscode
 .idea
 .DS_Store
 *.suo
@@ -20,4 +24,29 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.env
+
+# Local agent/tooling state
+.agents/
+.claude/
+.cursor/mcp.json
+.obsidian/
+.playwright-cli/
+.serena/
+.smart-env
+
+# Local memory app state
+project-memory/.obsidian/
+
+# Supabase local CLI state
+supabase/.temp/
+supabase/.tmp-cli/
+
+# Local backups / scratch
+backups/
+*.base
+supabase-backup-before-*.sql
+
+# Taskmaster generated/runtime artifacts
+.taskmaster/state.json
+.taskmaster/tasks/*.backup-*.json
+.taskmaster/templates/

@@ -4,6 +4,8 @@ import { loadData, saveTableData, loadBidApprovals, saveBidApprovals, loadNegApp
 import { loadSettings, saveSettings } from '../store/settingsStore';
 import { SHEET_TABS, SHEET_PARSERS, extractSheetId, fetchTabAsCSV } from '../lib/googleSheets';
 import { parseCSV } from '../lib/csv/parser';
+import { addActiveAccountScope, getActiveAccountScope, getActiveSpreadsheetId } from '../lib/accountSources';
+import { recordSyncRun } from '../lib/syncRuns';
 
 interface AppContextValue {
   data: ImportedData;
@@ -64,9 +66,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const syncSheet = useCallback(async (overrideSheetId?: string) => {
-    const rawId = overrideSheetId ?? settings.sheet_id;
+    const rawId = overrideSheetId ?? getActiveSpreadsheetId(settings);
     const sheetId = extractSheetId(rawId);
     if (!sheetId) return;
+    const syncScope = getActiveAccountScope(settings);
+    const startedAt = new Date().toISOString();
 
     setSyncState({
       running: true,
@@ -86,7 +90,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (result.error || !result.csv) return { ...base, status: 'error',   error: result.message ?? 'Unknown error' };
           const rawRows = await parseCSV(result.csv);
           if (!rawRows.length) return { ...base, status: 'missing' };
-          const parsed = SHEET_PARSERS[tab.key](rawRows);
+          const parsed = addActiveAccountScope(SHEET_PARSERS[tab.key](rawRows), settings);
           saveTableData(tab.key, parsed, `sheet:${sheetId}/${tab.tabName}`);
           return { ...base, status: 'synced', rows: parsed.length };
         } catch (err) {
@@ -100,20 +104,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const sheetError = privateCount > 0
       ? 'Sheet is not publicly accessible. Share it as "Anyone with the link can view".'
       : undefined;
+    const syncedRows = results
+      .filter((r) => r.status === 'synced')
+      .reduce((sum, row) => sum + (row.rows ?? 0), 0);
+    const syncedTabs = results.filter((r) => r.status === 'synced').length;
+    const hasError = results.some((r) => r.status === 'error' || r.status === 'private');
+    const hasMissing = results.some((r) => r.status === 'missing');
+    const hasSynced = syncedRows > 0 || syncedTabs > 0;
+    const syncStatus = hasError ? 'failed' : hasSynced && hasMissing ? 'warning' : hasSynced ? 'success' : 'warning';
+
+    if (syncScope) {
+      recordSyncRun(syncScope, {
+        started_at: startedAt,
+        finished_at: new Date().toISOString(),
+        status: syncStatus,
+        rows_imported: syncedRows,
+        tabs_updated: syncedTabs,
+        error_message: sheetError ?? null,
+        trigger_type: 'manual',
+        source: `sheet:${sheetId}`,
+      });
+    }
 
     setData(loadData());
     setSyncState({ running: false, lastAt: new Date().toISOString(), results, sheetError });
-  }, [settings.sheet_id]);
+  }, [settings]);
 
   useEffect(() => { syncSheetRef.current = syncSheet; }, [syncSheet]);
 
   // Auto-refresh
   useEffect(() => {
-    if (!settings.sheet_id || settings.sheet_auto_refresh === 'off') return;
+    if (!getActiveSpreadsheetId(settings) || settings.sheet_auto_refresh === 'off') return;
     const ms = settings.sheet_auto_refresh === '15min' ? 15 * 60 * 1000 : 60 * 60 * 1000;
     const id = setInterval(() => syncSheetRef.current?.(), ms);
     return () => clearInterval(id);
-  }, [settings.sheet_id, settings.sheet_auto_refresh]);
+  }, [settings]);
 
   useEffect(() => {
     const handler = () => refreshData();

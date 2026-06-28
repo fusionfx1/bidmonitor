@@ -7,6 +7,8 @@ const REST_HEADERS      = {
   'Content-Type':  'application/json',
 };
 
+export const CAMPAIGN_MAPPING_WRITES_ENABLED = false;
+
 // ─── Campaign mappings (Supabase) ─────────────────────────────────────────────
 
 export interface CampaignMapping {
@@ -22,18 +24,11 @@ export async function loadCampaignMappings(): Promise<CampaignMapping[]> {
 }
 
 export async function saveCampaignMapping(m: Omit<CampaignMapping, 'id'>): Promise<void> {
-  const res = await fetch(`${REST}/campaign_mappings`, {
-    method: 'POST',
-    headers: { ...REST_HEADERS, Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify(m),
-  });
-  if (!res.ok) throw new Error(`Save mapping: ${await res.text()}`);
+  void m;
+  throw new Error('Campaign mapping writes are disabled in review-only mode.');
 }
 
 export async function deleteCampaignMapping(id: string): Promise<void> {
-  const res = await fetch(`${REST}/campaign_mappings?id=eq.${id}`, {
-    method: 'DELETE',
-    headers: REST_HEADERS,
-  });
-  if (!res.ok) throw new Error(`Delete mapping: ${await res.text()}`);
+  void id;
+  throw new Error('Campaign mapping deletes are disabled in review-only mode.');
 }

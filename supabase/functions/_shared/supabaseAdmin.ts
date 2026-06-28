@@ -30,6 +30,19 @@ export async function dbUpsert(table: string, body: unknown): Promise<void> {
   if (!res.ok) throw new Error(`DB upsert ${table}: ${await res.text()}`);
 }
 
+export async function dbInsert(table: string, body: unknown): Promise<void> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST",
+    headers: {
+      apikey:        SERVICE_KEY,
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`DB insert ${table}: ${await res.text()}`);
+}
+
 export async function dbDelete(table: string, query: string): Promise<void> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
     method: "DELETE",

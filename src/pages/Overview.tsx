@@ -1,164 +1,217 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
-  DollarSign, MousePointerClick, Eye, TrendingUp, BarChart2,
-  Layers, AlertTriangle, Gavel, MinusCircle, Activity, ShieldAlert,
-  Clock, XCircle, RefreshCw,
+  Activity,
+  AlertTriangle,
+  BarChart2,
+  Clock,
+  DollarSign,
+  Layers,
+  RefreshCw,
+  Search,
+  Settings,
+  ShieldCheck,
+  TrendingUp,
 } from 'lucide-react';
-import { PageContainer, PageHeader, Card, CardBody } from '../components/Layout';
-import { KPICard } from '../components/KPICard';
+import { PageContainer, PageHeader, Card, CardBody, CardHeader } from '../components/Layout';
+import { DataTable } from '../components/DataTable';
+import type { Column } from '../components/DataTable';
+import { NavLink } from '../lib/router';
 import { useApp } from '../context/AppContext';
-import { sumField, fmtCurrency, fmtPercent } from '../lib/metrics/calculations';
-import { computeBidDecisions } from '../lib/decisionEngine/bidDecisions';
-import { computeNegativeCandidates } from '../lib/decisionEngine/negativeCandidates';
-import { computePolicyIssues } from '../lib/decisionEngine/policyIssues';
-import { computeSyncHealth, relativeTime } from '../lib/syncHealth';
-import type { FreshnessStatus } from '../lib/syncHealth';
-import type { SyncLogStatus } from '../types';
+import { buildMccDashboard } from '../lib/mccDashboard';
+import type { DashboardTone, MccAccountRow, MccSparkPoint, MccSummaryCard } from '../lib/mccDashboard';
+import { relativeTime } from '../lib/syncHealth';
 
-// ─── Sync status banner ───────────────────────────────────────────────────────
-
-const FRESHNESS_CFG: Record<FreshnessStatus, { bg: string; border: string; dot: string; label: string }> = {
-  OK:      { bg: 'bg-emerald-50', border: 'border-emerald-200', dot: 'bg-emerald-400', label: 'Fresh' },
-  STALE:   { bg: 'bg-amber-50',   border: 'border-amber-200',   dot: 'bg-amber-400',   label: 'Stale' },
-  ERROR:   { bg: 'bg-red-50',     border: 'border-red-200',     dot: 'bg-red-400',     label: 'Error' },
-  UNKNOWN: { bg: 'bg-gray-50',    border: 'border-gray-200',    dot: 'bg-gray-300',    label: 'Unknown' },
+const TONE_CLASS: Record<DashboardTone, { text: string; bg: string; border: string; dot: string }> = {
+  ok: { text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  warn: { text: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', dot: 'bg-amber-500' },
+  error: { text: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', dot: 'bg-red-500' },
+  safe: { text: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', dot: 'bg-blue-500' },
+  missing: { text: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200', dot: 'bg-gray-400' },
 };
 
-const STATUS_BADGE: Record<SyncLogStatus, string> = {
-  SUCCESS: 'bg-emerald-100 text-emerald-700',
-  PARTIAL: 'bg-amber-100 text-amber-700',
-  FAILED:  'bg-red-100 text-red-700',
-};
-
-function FreshnessDot({ status }: { status: FreshnessStatus }) {
-  const cfg = FRESHNESS_CFG[status];
-  return <span className={`inline-block w-2 h-2 rounded-full ${cfg.dot} flex-shrink-0`} />;
+function ToneBadge({ tone, children }: { tone: DashboardTone; children: ReactNode }) {
+  const cfg = TONE_CLASS[tone];
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs font-medium ${cfg.bg} ${cfg.border} ${cfg.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+      {children}
+    </span>
+  );
 }
 
-function SyncBanner() {
-  const { data } = useApp();
-  const health = useMemo(() => computeSyncHealth(data.syncLog), [data.syncLog]);
-  const cfg = FRESHNESS_CFG[health.freshnessStatus];
-
-  if (health.freshnessStatus === 'UNKNOWN' && health.totalRuns === 0) {
-    return (
-      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 mb-4 text-xs text-gray-500">
-        <RefreshCw size={12} className="flex-shrink-0 text-gray-400" />
-        <span>
-          Script run log not found. Add a <code className="font-mono bg-gray-100 px-1 rounded">google_sync_log</code> tab
-          to your Google Sheet to track hourly Google Ads Script runs.
-        </span>
-      </div>
-    );
-  }
+function SummaryCard({ card }: { card: MccSummaryCard }) {
+  const icons: Record<string, ReactNode> = {
+    total_cost: <DollarSign size={16} />,
+    conversions: <TrendingUp size={16} />,
+    true_value: <DollarSign size={16} />,
+    cpa: <BarChart2 size={16} />,
+    roi_roas: <Activity size={16} />,
+    projected_month_spend: <Clock size={16} />,
+    alerts: <AlertTriangle size={16} />,
+  };
+  const cfg = TONE_CLASS[card.tone];
 
   return (
-    <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 ${cfg.bg} border ${cfg.border} rounded-xl px-4 py-2.5 mb-4`}>
-      {/* Freshness */}
-      <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
-        <FreshnessDot status={health.freshnessStatus} />
-        <span>{cfg.label}</span>
+    <div className={`bg-white rounded-xl border p-4 shadow-sm ${cfg.border}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{card.label}</span>
+        <span className={cfg.text}>{icons[card.id] ?? <Activity size={16} />}</span>
       </div>
-
-      {/* Runs today */}
-      <div className="flex items-center gap-1 text-xs text-gray-600">
-        <RefreshCw size={11} className="text-gray-400" />
-        <span>
-          Script runs today: <strong className="text-gray-800">{health.runsToday}</strong>
-          <span className="text-gray-400"> / {health.expectedRunsToday} expected</span>
-        </span>
-      </div>
-
-      {/* Last run */}
-      {health.lastScriptRunAt && (
-        <div className="flex items-center gap-1 text-xs text-gray-600">
-          <Clock size={11} className="text-gray-400" />
-          <span title={new Date(health.lastScriptRunAt).toLocaleString()}>
-            Last run: <strong className="text-gray-800">{relativeTime(health.lastScriptRunAt)}</strong>
-          </span>
-        </div>
-      )}
-
-      {/* Status badge */}
-      {health.lastStatus && (
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[health.lastStatus]}`}>
-          {health.lastStatus}
-        </span>
-      )}
-
-      {/* Error message */}
-      {health.lastErrorMessage && health.freshnessStatus === 'ERROR' && (
-        <div className="flex items-center gap-1 text-xs text-red-600">
-          <XCircle size={11} />
-          <span className="truncate max-w-xs">{health.lastErrorMessage}</span>
-        </div>
-      )}
-
-      {/* Total runs chip */}
-      <div className="ml-auto text-xs text-gray-400 flex items-center gap-1">
-        <Activity size={11} />
-        {health.totalRuns} total runs
+      <div className={`text-2xl font-bold ${cfg.text}`}>{card.displayValue}</div>
+      <div className="mt-3 space-y-1 text-xs text-gray-500">
+        <p><span className="font-medium text-gray-700">Meaning:</span> {card.meaning}</p>
+        <p><span className="font-medium text-gray-700">Action:</span> {card.action}</p>
+        <p><span className="font-medium text-gray-700">Outcome:</span> {card.outcome}</p>
       </div>
     </div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+function Sparkline({ points }: { points: MccSparkPoint[] }) {
+  if (points.length === 0) {
+    return <span className="text-xs text-gray-400">No spend</span>;
+  }
+
+  const maxCost = Math.max(...points.map((point) => point.cost), 1);
+  const polyline = points
+    .map((point, index) => {
+      const x = points.length === 1 ? 50 : (index / (points.length - 1)) * 100;
+      const y = 32 - (point.cost / maxCost) * 28;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  return (
+    <svg viewBox="0 0 100 36" className="w-28 h-9" role="img" aria-label="30-day cost sparkline">
+      <polyline points={polyline} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500" />
+    </svg>
+  );
+}
+
+function AlertChips({ row }: { row: MccAccountRow }) {
+  if (row.alerts.length === 0) {
+    return <ToneBadge tone="ok">Clear</ToneBadge>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {row.alerts.slice(0, 3).map((alert) => (
+        <NavLink
+          key={alert.id}
+          to={alert.drillHref}
+          className={`px-2 py-1 rounded-full text-xs font-medium border ${
+            alert.level === 'critical'
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : alert.level === 'warning'
+                ? 'bg-amber-50 border-amber-200 text-amber-700'
+                : 'bg-gray-50 border-gray-200 text-gray-600'
+          }`}
+        >
+          {alert.label}
+        </NavLink>
+      ))}
+      {row.alerts.length > 3 && <span className="text-xs text-gray-400">+{row.alerts.length - 3}</span>}
+    </div>
+  );
+}
+
+function formatCurrency(value: number, currency: string): string {
+  return `${currency || 'THB'} ${value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
+}
+
+function formatPercent(value: number | null): string {
+  return value === null ? 'N/A' : `${value.toFixed(1)}%`;
+}
 
 export function Overview() {
-  const { data, settings, bidApprovals, negApprovals } = useApp();
+  const { data, settings, refreshData } = useApp();
+  const [search, setSearch] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
 
-  const kpis = useMemo(() => {
-    const { campaigns, voluum } = data;
-    const hasVoluum = voluum.length > 0;
+  const model = useMemo(() => buildMccDashboard(data, settings), [data, settings]);
+  const filteredRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return model.accountRows.filter((row) => {
+      const accountMatches = !selectedAccountId || row.id === selectedAccountId;
+      const queryMatches = !query || [row.name, row.accountId, row.customerId, row.sourceSheetId]
+        .some((value) => value.toLowerCase().includes(query));
+      return accountMatches && queryMatches;
+    });
+  }, [model.accountRows, search, selectedAccountId]);
 
-    const totalSpend = sumField(campaigns, 'cost');
-    const clicks = sumField(campaigns, 'clicks');
-    const impressions = sumField(campaigns, 'impressions');
-    const ctr = impressions > 0 ? clicks / impressions : 0;
-    const avgCpc = clicks > 0 ? totalSpend / clicks : 0;
-    const googleConversions = sumField(campaigns, 'conversions');
-    const voluumConversions = hasVoluum ? sumField(voluum, 'voluum_conversions') : 0;
-    const revenue = hasVoluum
-      ? sumField(voluum, 'revenue')
-      : sumField(campaigns, 'conversion_value');
-    const profit = revenue - totalSpend;
-    const roi = totalSpend > 0 ? ((revenue - totalSpend) / totalSpend) * 100 : 0;
-    const usedConv = hasVoluum ? voluumConversions : googleConversions;
-    const cpa = usedConv > 0 ? totalSpend / usedConv : 0;
+  const columns = useMemo<Column<MccAccountRow>[]>(() => [
+    {
+      key: 'name',
+      label: 'Account',
+      render: (row) => (
+        <div>
+          <div className="font-medium text-gray-900">{row.name}</div>
+          <div className="text-xs text-gray-400">{row.accountId} / {row.customerId}</div>
+        </div>
+      ),
+    },
+    { key: 'sparkline', label: '30d', render: (row) => <Sparkline points={row.sparkline} />, sortable: false },
+    { key: 'cost', label: 'Cost', align: 'right', render: (row) => formatCurrency(row.cost, settings.currency) },
+    { key: 'conversions', label: 'Conv.', align: 'right', render: (row) => row.conversions.toFixed(1) },
+    { key: 'value', label: 'Value', align: 'right', render: (row) => formatCurrency(row.value, settings.currency) },
+    { key: 'cpa', label: 'CPA', align: 'right', render: (row) => row.cpa === null ? 'N/A' : formatCurrency(row.cpa, settings.currency) },
+    { key: 'roi', label: 'ROI', align: 'right', render: (row) => formatPercent(row.roi) },
+    { key: 'roas', label: 'ROAS', align: 'right', render: (row) => formatPercent(row.roas) },
+    { key: 'projectedMonthSpend', label: 'Month proj.', align: 'right', render: (row) => formatCurrency(row.projectedMonthSpend, settings.currency) },
+    { key: 'alerts', label: 'Alerts', render: (row) => <AlertChips row={row} />, sortable: false },
+    {
+      key: 'drillHref',
+      label: 'Drill',
+      align: 'center',
+      render: (row) => <NavLink to={row.drillHref} className="text-xs font-medium text-blue-600 hover:text-blue-800">Open</NavLink>,
+      sortable: false,
+    },
+  ], [settings.currency]);
 
-    const policyIssues = computePolicyIssues(data.policy);
-    const bidDecisions = computeBidDecisions(
-      data.keywords, data.auctionKeywords, data.auctionCampaigns,
-      data.voluum, settings, bidApprovals
-    );
-    const negCandidates = computeNegativeCandidates(data.searchTerms, settings, negApprovals);
-
-    const bidPending = bidDecisions.filter((d) => d.action !== 'HOLD' && d.approval_status === 'PENDING_REVIEW').length;
-    const rankLostCamps = data.auctionCampaigns.filter((c) => c.search_rank_lost_impression_share > 0.2).length;
-    const budgetLostCamps = data.auctionCampaigns.filter((c) => c.search_budget_lost_impression_share > 0.2).length;
-
-    return {
-      totalSpend, clicks, impressions, ctr, avgCpc,
-      googleConversions, voluumConversions, revenue, profit, roi, cpa,
-      policyIssuesCount: policyIssues.length,
-      bidActionsPending: bidPending,
-      negativeCandidatesCount: negCandidates.length,
-      campaignsRankLost: rankLostCamps,
-      campaignsBudgetLost: budgetLostCamps,
-    };
-  }, [data, settings, bidApprovals, negApprovals]);
-
-  const hasData = data.campaigns.length > 0;
+  const hasData = data.campaigns.length > 0 || model.accountRows.length > 0;
 
   return (
     <PageContainer>
       <PageHeader
-        title="Overview"
-        description={hasData ? `Showing aggregated metrics from imported data` : undefined}
+        title="MCC Overview"
+        description={hasData ? 'Read-only multi-account control view from imported Google Ads and Voluum data' : undefined}
       />
 
-      <SyncBanner />
+      <Card className="mb-4">
+        <CardBody>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <ShieldCheck size={16} className="text-emerald-600" />
+              <span>Action mode:</span>
+              <ToneBadge tone={model.visibleActionMode === 'disabled' ? 'safe' : 'ok'}>
+                {model.visibleActionMode === 'disabled' ? 'Disabled' : 'Review only'}
+              </ToneBadge>
+            </div>
+            {model.freshness.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 text-sm text-gray-600">
+                <ToneBadge tone={item.tone}>
+                  {item.label}: {item.status}
+                  {item.runsToday !== null && item.expectedRunsToday !== null ? ` ${item.runsToday}/${item.expectedRunsToday}` : ` ${item.rows} rows`}
+                </ToneBadge>
+                {item.lastAt && <span className="text-xs text-gray-400">{relativeTime(item.lastAt)}</span>}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={refreshData}
+              className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              <RefreshCw size={14} />
+              Refresh local
+            </button>
+            <NavLink to="/settings" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+              <Settings size={14} />
+              Settings
+            </NavLink>
+          </div>
+        </CardBody>
+      </Card>
 
       {!hasData && (
         <Card>
@@ -174,101 +227,54 @@ export function Overview() {
 
       {hasData && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-6">
-            <KPICard
-              label="Total Spend"
-              value={fmtCurrency(kpis.totalSpend, settings.currency)}
-              color="default"
-              icon={<DollarSign size={16} />}
-            />
-            <KPICard
-              label="Clicks"
-              value={kpis.clicks.toLocaleString()}
-              icon={<MousePointerClick size={16} />}
-            />
-            <KPICard
-              label="Impressions"
-              value={kpis.impressions.toLocaleString()}
-              icon={<Eye size={16} />}
-            />
-            <KPICard
-              label="CTR"
-              value={fmtPercent(kpis.ctr)}
-              icon={<Activity size={16} />}
-            />
-            <KPICard
-              label="Avg CPC"
-              value={fmtCurrency(kpis.avgCpc, settings.currency)}
-              icon={<BarChart2 size={16} />}
-            />
-            <KPICard
-              label="Google Conv."
-              value={kpis.googleConversions.toFixed(1)}
-              icon={<TrendingUp size={16} />}
-            />
-            <KPICard
-              label="Voluum Conv."
-              value={data.voluum.length > 0 ? kpis.voluumConversions.toFixed(1) : 'N/A'}
-              sub={data.voluum.length === 0 ? 'Voluum not connected' : undefined}
-              color={data.voluum.length === 0 ? 'amber' : 'default'}
-            />
-            <KPICard
-              label="Revenue"
-              value={fmtCurrency(kpis.revenue, settings.currency)}
-              color={kpis.revenue > 0 ? 'green' : 'default'}
-              icon={<DollarSign size={16} />}
-            />
-            <KPICard
-              label="Profit"
-              value={fmtCurrency(kpis.profit, settings.currency)}
-              color={kpis.profit > 0 ? 'green' : kpis.profit < 0 ? 'red' : 'default'}
-            />
-            <KPICard
-              label="ROI"
-              value={`${kpis.roi.toFixed(1)}%`}
-              color={kpis.roi > 0 ? 'green' : kpis.roi < 0 ? 'red' : 'default'}
-            />
-            <KPICard
-              label="CPA"
-              value={kpis.cpa > 0 ? fmtCurrency(kpis.cpa, settings.currency) : 'N/A'}
-              sub={`Target: ${fmtCurrency(settings.target_cpa, settings.currency)}`}
-              color={kpis.cpa > 0 && kpis.cpa <= settings.target_cpa ? 'green' : kpis.cpa > settings.target_cpa ? 'red' : 'default'}
-            />
-            <KPICard
-              label="Policy Issues"
-              value={kpis.policyIssuesCount}
-              color={kpis.policyIssuesCount > 0 ? 'red' : 'green'}
-              icon={<ShieldAlert size={16} />}
-            />
-            <KPICard
-              label="Bid Actions Pending"
-              value={kpis.bidActionsPending}
-              color={kpis.bidActionsPending > 0 ? 'amber' : 'green'}
-              icon={<Gavel size={16} />}
-            />
-            <KPICard
-              label="Negative Candidates"
-              value={kpis.negativeCandidatesCount}
-              color={kpis.negativeCandidatesCount > 0 ? 'amber' : 'green'}
-              icon={<MinusCircle size={16} />}
-            />
-            <KPICard
-              label="Rank-Lost Campaigns"
-              value={kpis.campaignsRankLost}
-              color={kpis.campaignsRankLost > 0 ? 'amber' : 'green'}
-            />
-            <KPICard
-              label="Budget-Lost Campaigns"
-              value={kpis.campaignsBudgetLost}
-              color={kpis.campaignsBudgetLost > 0 ? 'blue' : 'green'}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+            {model.summaryCards.map((card) => <SummaryCard key={card.id} card={card} />)}
           </div>
 
-          {data.voluum.length === 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex items-center gap-2">
+          <Card>
+            <CardHeader
+              title="Account control table"
+              actions={(
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Search accounts"
+                      className="pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                  <select
+                    value={selectedAccountId}
+                    onChange={(event) => setSelectedAccountId(event.target.value)}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">All accounts</option>
+                    {model.accountRows.map((row) => (
+                      <option key={row.id} value={row.id}>{row.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            />
+            <CardBody>
+              <p className="text-xs text-gray-500 mb-3">
+                Cost, conversions, value, CPA, ROI/ROAS, pacing, freshness, and drill-through alerts.
+              </p>
+              <DataTable
+                columns={columns}
+                data={filteredRows}
+                emptyMessage="No accounts match the current filter."
+                rowKey={(row) => row.id}
+              />
+            </CardBody>
+          </Card>
+
+          {!model.hasVoluum && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex items-center gap-2">
               <AlertTriangle size={16} className="flex-shrink-0" />
-              Voluum data is not connected. Revenue and conversion metrics are sourced from Google Ads data only.
-              Import <code className="font-mono bg-amber-100 px-1 rounded">voluum_performance</code> CSV to enable Voluum analytics.
+              Voluum data is not connected. Revenue and conversion metrics fall back to Google Ads conversion value until Voluum CSV is imported.
             </div>
           )}
         </>

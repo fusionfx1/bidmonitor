@@ -10,6 +10,7 @@ import {
 } from '../lib/reconciliation/engine';
 import {
   loadCampaignMappings, saveCampaignMapping, deleteCampaignMapping,
+  CAMPAIGN_MAPPING_WRITES_ENABLED,
   type CampaignMapping,
 } from '../lib/googleAds/api';
 import { fetchVoluumReport, resolveDateRange } from '../lib/voluum/api';
@@ -66,6 +67,10 @@ export function UnmatchedRecords() {
   const gadsNames       = gadsAgg.map((r) => r.campaignName);
 
   async function handleSaveMapping(voluumName: string) {
+    if (!CAMPAIGN_MAPPING_WRITES_ENABLED) {
+      setError('Campaign mapping writes are disabled in review-only mode.');
+      return;
+    }
     const gadsName = selectedGads[voluumName];
     if (!gadsName) return;
     setSaving(voluumName);
@@ -84,6 +89,10 @@ export function UnmatchedRecords() {
   }
 
   async function handleDelete(id: string) {
+    if (!CAMPAIGN_MAPPING_WRITES_ENABLED) {
+      setError('Campaign mapping deletes are disabled in review-only mode.');
+      return;
+    }
     setDeleting(id);
     setError(null);
     try {
@@ -138,7 +147,7 @@ export function UnmatchedRecords() {
           <Card className="mb-5">
             <CardHeader
               title={`Manual Mappings (${mappings.length})`}
-              actions={<span className="text-xs text-gray-400">Saved to Supabase · applied automatically in reconciliation</span>}
+              actions={<span className="text-xs text-gray-400">Review-only · Supabase writes disabled</span>}
             />
             {mappings.length === 0 ? (
               <div className="px-4 py-6 text-sm text-gray-400 text-center">No manual mappings yet.</div>
@@ -153,9 +162,9 @@ export function UnmatchedRecords() {
                     </div>
                     <button
                       onClick={() => handleDelete(m.id!)}
-                      disabled={deleting === m.id}
+                      disabled={!CAMPAIGN_MAPPING_WRITES_ENABLED || deleting === m.id}
                       className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                      title="Remove mapping"
+                      title={CAMPAIGN_MAPPING_WRITES_ENABLED ? 'Remove mapping' : 'Mapping deletes disabled in review-only mode'}
                     >
                       {deleting === m.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                     </button>
@@ -198,8 +207,9 @@ export function UnmatchedRecords() {
                         </select>
                         <button
                           onClick={() => handleSaveMapping(r.campaignName)}
-                          disabled={!selectedGads[r.campaignName] || saving === r.campaignName}
+                          disabled={!CAMPAIGN_MAPPING_WRITES_ENABLED || !selectedGads[r.campaignName] || saving === r.campaignName}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                          title={CAMPAIGN_MAPPING_WRITES_ENABLED ? 'Map campaign' : 'Mapping writes disabled in review-only mode'}
                         >
                           {saving === r.campaignName ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
                           Map

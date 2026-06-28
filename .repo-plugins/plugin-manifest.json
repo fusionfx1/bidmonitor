@@ -1,0 +1,53 @@
+{
+  "project": "Harness - Google Ads Script Project",
+  "version": "1.0.0",
+  "mode": "local-first/read-only/review-only",
+  "plugins": {
+    "memory": {
+      "enabled": true,
+      "path": ".projectmem"
+    },
+    "harness": {
+      "enabled": true,
+      "path": "harness"
+    },
+    "repo_map": {
+      "enabled": true,
+      "path": ".repo-plugins/repo-map.md"
+    },
+    "safety_gate": {
+      "enabled": true,
+      "path": ".repo-plugins/safety-policy.md"
+    },
+    "test_gate": {
+      "enabled": true,
+      "path": ".repo-plugins/test-policy.md"
+    },
+    "deploy_gate": {
+      "enabled": true,
+      "path": ".repo-plugins/deploy-policy.md"
+    },
+    "architecture_map": {
+      "enabled": true,
+      "path": ".repo-plugins/architecture-map.md"
+    },
+    "agent_handoff": {
+      "enabled": true,
+      "path": ".repo-plugins/handoff-template.md"
+    },
+    "reporting": {
+      "enabled": true,
+      "path": ".repo-plugins/report-template.md"
+    }
+  },
+  "hard_stops": [
+    "google_ads_mutate",
+    "bid_write",
+    "pause_campaign",
+    "db_push_without_owner_approval",
+    "deploy_without_owner_approval",
+    "function_secret_change_without_owner_approval",
+    "voluum_secret_frontend_exposure",
+    "cross_account_data_leak"
+  ]
+}

@@ -1,6 +1,7 @@
-import type { GoogleSyncLogRow, SyncLogStatus } from '../types';
+import type { GoogleSyncLogRow, ImportedData, SyncLogStatus } from '../types';
 
 export type FreshnessStatus = 'OK' | 'STALE' | 'ERROR' | 'UNKNOWN';
+export type VoluumFreshnessStatus = FreshnessStatus | 'OPTIONAL';
 
 export interface SyncHealth {
   totalRuns: number;
@@ -12,6 +13,13 @@ export interface SyncHealth {
   lastDurationSeconds: number | null;
   lastErrorMessage: string | null;
   freshnessStatus: FreshnessStatus;
+}
+
+export interface VoluumFreshness {
+  status: VoluumFreshnessStatus;
+  rows: number;
+  importedAt: string | null;
+  staleFailClosed: boolean;
 }
 
 const STALE_MS = 90 * 60 * 1000; // 90 minutes
@@ -64,6 +72,31 @@ export function computeSyncHealth(rows: GoogleSyncLogRow[]): SyncHealth {
     lastErrorMessage: latest.error_message || null,
     freshnessStatus,
   };
+}
+
+export function computeVoluumFreshness(
+  data: Pick<ImportedData, 'voluum' | 'meta'>,
+  staleMs = STALE_MS
+): VoluumFreshness {
+  const rows = data.voluum.length;
+  const importedAt = data.meta.voluum?.importedAt ?? null;
+
+  if (rows === 0) {
+    return { status: 'OPTIONAL', rows, importedAt, staleFailClosed: false };
+  }
+
+  if (!importedAt) {
+    return { status: 'UNKNOWN', rows, importedAt, staleFailClosed: true };
+  }
+
+  const importedAtMs = new Date(importedAt).getTime();
+  if (Number.isNaN(importedAtMs)) {
+    return { status: 'UNKNOWN', rows, importedAt, staleFailClosed: true };
+  }
+
+  const elapsed = Date.now() - importedAtMs;
+  const status: FreshnessStatus = elapsed <= staleMs ? 'OK' : 'STALE';
+  return { status, rows, importedAt, staleFailClosed: status !== 'OK' };
 }
 
 export function relativeTime(isoStr: string): string {

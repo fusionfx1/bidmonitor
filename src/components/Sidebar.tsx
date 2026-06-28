@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Target, Key, Search, TrendingUp,
   ShieldAlert, Gavel, MinusCircle, Clock, GitCompare,
   Settings, Upload, Download, Activity, DollarSign, CalendarDays,
-  BarChart2, Link2, Stethoscope,
+  BarChart2, Link2, Stethoscope, ListChecks, SlidersHorizontal, Network,
+  Library,
 } from 'lucide-react';
 import { NavLink } from '../lib/router';
 import { useApp } from '../context/AppContext';
@@ -21,11 +22,16 @@ const navItems = [
   { to: '/auction-signals', label: 'Auction Signals', icon: TrendingUp },
   { to: '/policy', label: 'Policy Issues', icon: ShieldAlert, badge: 'policy' },
   { to: '/bid-decisions', label: 'Bid Decisions', icon: Gavel, badge: 'bids' },
+  { to: '/auto-bid-feed', label: 'Proposal Queue', icon: ListChecks },
   { to: '/negatives', label: 'Negatives', icon: MinusCircle, badge: 'negs' },
   { to: '/hour-device', label: 'Hour / Device', icon: Clock },
   { to: '/voluum-api', label: 'Voluum', icon: Activity },
   { to: '/voluum', label: 'Voluum Mismatch', icon: GitCompare },
   { to: '/profit', label: 'Profit Dashboard', icon: DollarSign },
+  { to: '/budget', label: 'Budget Optimizer', icon: SlidersHorizontal },
+  { to: '/trends', label: 'Trends', icon: TrendingUp },
+  { to: '/advanced', label: 'Advanced Views', icon: Network },
+  { to: '/prompts', label: 'Prompt Library', icon: Library },
   { to: '/reconciliation', label: 'TZ Reconciliation', icon: GitCompare },
   { to: '/cohort', label: 'Cohort Profit', icon: CalendarDays },
   { to: '/cross-platform', label: 'Cross-Platform', icon: GitCompare },

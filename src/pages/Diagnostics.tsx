@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   CheckCircle, XCircle, AlertTriangle, RefreshCw, Loader2,
-  Activity, Clock, Wifi, WifiOff, Info, Terminal,
+  Activity, Clock, Wifi, WifiOff, Info, Terminal, Copy,
 } from 'lucide-react';
 import { PageContainer, PageHeader, Card, CardHeader, CardBody } from '../components/Layout';
 import { useApp } from '../context/AppContext';
 import { SHEET_TABS } from '../lib/googleSheets';
 import { fetchVoluumHealth } from '../lib/voluum/api';
 import { computeSyncHealth, relativeTime } from '../lib/syncHealth';
+import { buildDiagnosticsModel } from '../lib/trendsDiagnostics';
 import type { FreshnessStatus, SyncHealth } from '../lib/syncHealth';
 import type { VoluumHealth } from '../lib/voluum/types';
 import type { TabSyncResult, SyncLogStatus } from '../types';
@@ -172,6 +173,7 @@ export function Diagnostics() {
   const [healthError,  setHealthError]  = useState<string | null>(null);
 
   const scriptHealth = useMemo(() => computeSyncHealth(data.syncLog), [data.syncLog]);
+  const trendDiagnostics = useMemo(() => buildDiagnosticsModel(data, settings), [data, settings]);
 
   const checkVoluum = useCallback(async () => {
     setHealthLoading(true);
@@ -237,6 +239,42 @@ export function Diagnostics() {
         }
       </div>
 
+      <Card className="mb-5">
+        <CardHeader
+          title="Trend Driver Diagnostics"
+          actions={
+            <button
+              onClick={() => navigator.clipboard?.writeText(trendDiagnostics.debugPacket)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50"
+            >
+              <Copy size={12} />
+              Copy debug packet
+            </button>
+          }
+        />
+        <CardBody className="space-y-3">
+          {trendDiagnostics.staleFailClosed && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+              Stale or failed sync detected. Diagnostics remain visible, but action recommendations are fail-closed.
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+            {trendDiagnostics.drivers.map((driver) => (
+              <div key={driver.id} className="bg-gray-50 rounded-lg px-3 py-2">
+                <div className="text-xs font-medium text-gray-500">{driver.label}</div>
+                <div className={`text-sm font-semibold ${
+                  driver.impact === 'positive' ? 'text-emerald-700' : driver.impact === 'negative' ? 'text-red-700' : 'text-gray-700'
+                }`}>
+                  {driver.delta >= 0 ? '+' : ''}{driver.delta.toFixed(2)}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="text-sm text-gray-700">{trendDiagnostics.autoInsight}</div>
+          <div className="text-xs text-gray-500">{trendDiagnostics.recommendedAction}</div>
+        </CardBody>
+      </Card>
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* ── Voluum API ── */}
         <Card>
@@ -289,18 +327,7 @@ export function Diagnostics() {
 
             {voluumMissing && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800">
-                Set <code className="bg-amber-100 px-1 rounded">VOLUUM_ACCESS_ID</code> and{' '}
-                <code className="bg-amber-100 px-1 rounded">VOLUUM_ACCESS_KEY</code> as Supabase Edge Function secrets to enable live data.
-              </div>
-            )}
-            {health && !health.connected && !health.credentialsMissing && health.error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700">
-                  <Terminal size={11} /> Error log
-                </div>
-                <pre className="text-xs text-red-700 whitespace-pre-wrap break-all font-mono leading-relaxed">
-                  {health.error}
-                </pre>
+                Configure tracker credentials in backend-only function settings to enable live data.
               </div>
             )}
             {health?.connected && (

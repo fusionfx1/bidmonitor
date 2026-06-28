@@ -1,0 +1,3 @@
+{"type":"project_init","project":"Harness — Google Ads Script Project","mode":"local-first/read-only/review-only"}
+{"type":"safety_gate","rule":"No deploy/db push/secret changes without explicit owner approval"}
+{"type":"scope","module":"Google Ads Script + Sheet Bridge + Dashboard + Supabase Edge Functions"}

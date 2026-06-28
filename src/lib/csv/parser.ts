@@ -1,6 +1,7 @@
 import type {
   CampaignRow, AdGroupRow, KeywordRow, SearchTermRow, HourDeviceRow,
   PolicyRow, AuctionCampaignRow, AuctionKeywordRow, VoluumRow, GoogleSyncLogRow,
+  PmaxPerformanceRow, GeoPerformanceRow, PlacementPerformanceRow,
 } from '../../types';
 
 function num(v: unknown): number {
@@ -231,6 +232,67 @@ export function parseSyncLog(raw: Record<string, unknown>[]): GoogleSyncLogRow[]
     voluum_rows: num(r['voluum_rows']),
     error_message: str(r['error_message']),
     script_version: str(r['script_version']),
+  }));
+}
+
+export function parsePmaxPerformance(raw: Record<string, unknown>[]): PmaxPerformanceRow[] {
+  return parseRows<PmaxPerformanceRow>(raw, (r) => ({
+    date: str(r['date']),
+    campaign_id: str(r['campaign_id']),
+    campaign_name: str(r['campaign_name']),
+    asset_group_id: str(r['asset_group_id']),
+    asset_group_name: str(r['asset_group_name']),
+    asset_id: str(r['asset_id']),
+    asset_type: str(r['asset_type']),
+    listing_group_filter: str(r['listing_group_filter']),
+    impressions: num(r['impressions']),
+    clicks: num(r['clicks']),
+    cost: num(r['cost']),
+    conversions: num(r['conversions']),
+    conversion_value: num(r['conversion_value']),
+    asset_signal: str(r['asset_signal']),
+    review_status: str(r['review_status']) as PmaxPerformanceRow['review_status'],
+  }));
+}
+
+export function parseGeoPerformance(raw: Record<string, unknown>[]): GeoPerformanceRow[] {
+  return parseRows<GeoPerformanceRow>(raw, (r) => ({
+    date: str(r['date']),
+    campaign_id: str(r['campaign_id']),
+    campaign_name: str(r['campaign_name']),
+    country_criterion_id: str(r['country_criterion_id']),
+    country_code: str(r['country_code']),
+    region: str(r['region']),
+    city: str(r['city']),
+    impressions: num(r['impressions']),
+    clicks: num(r['clicks']),
+    cost: num(r['cost']),
+    conversions: num(r['conversions']),
+    conversion_value: num(r['conversion_value']),
+    profit: num(r['profit']),
+    roi: num(r['roi']),
+    geo_signal: str(r['geo_signal']),
+    review_status: str(r['review_status']) as GeoPerformanceRow['review_status'],
+  }));
+}
+
+export function parsePlacementPerformance(raw: Record<string, unknown>[]): PlacementPerformanceRow[] {
+  return parseRows<PlacementPerformanceRow>(raw, (r) => ({
+    date: str(r['date']),
+    campaign_id: str(r['campaign_id']),
+    campaign_name: str(r['campaign_name']),
+    ad_group_id: str(r['ad_group_id']),
+    ad_group_name: str(r['ad_group_name']),
+    placement: str(r['placement']),
+    placement_type: str(r['placement_type']),
+    impressions: num(r['impressions']),
+    clicks: num(r['clicks']),
+    cost: num(r['cost']),
+    conversions: num(r['conversions']),
+    conversion_value: num(r['conversion_value']),
+    profit: num(r['profit']),
+    placement_signal: str(r['placement_signal']),
+    review_status: str(r['review_status']) as PlacementPerformanceRow['review_status'],
   }));
 }
 

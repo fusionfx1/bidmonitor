@@ -35,11 +35,6 @@ export function getTokenExpiresAt(): string | null {
   return tokenCache ? new Date(tokenCache.expiresAt).toISOString() : null;
 }
 
-/** Acquire a fresh token to prove credentials are valid. Throws on auth failure. */
-export async function testAuth(): Promise<void> {
-  await acquireToken();
-}
-
 async function acquireToken(): Promise<string> {
   if (tokenCache && Date.now() < tokenCache.expiresAt - 60_000) {
     return tokenCache.token;

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock,
   ChevronDown, ChevronUp, Upload, Link, Loader2, Trash2,
@@ -10,8 +10,10 @@ import { SHEET_TABS, extractSheetId } from '../lib/googleSheets';
 import {
   parseCSV, parseCampaigns, parseAdGroups, parseKeywords, parseSearchTerms,
   parseHourDevice, parsePolicy, parseAuctionCampaigns, parseAuctionKeywords, parseVoluum, parseSyncLog,
+  parsePmaxPerformance, parseGeoPerformance, parsePlacementPerformance,
 } from '../lib/csv/parser';
 import { clearAllData } from '../store/dataStore';
+import { addActiveAccountScope, getActiveAccountSource, getActiveSpreadsheetId, makeAccountSource } from '../lib/accountSources';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +34,8 @@ const CSV_PARSERS: Record<DataTableKey, (rows: any[]) => any[]> = {
   campaigns: parseCampaigns, adGroups: parseAdGroups, keywords: parseKeywords,
   searchTerms: parseSearchTerms, hourDevice: parseHourDevice, policy: parsePolicy,
   auctionCampaigns: parseAuctionCampaigns, auctionKeywords: parseAuctionKeywords,
+  pmaxPerformance: parsePmaxPerformance, geoPerformance: parseGeoPerformance,
+  placementPerformance: parsePlacementPerformance,
   voluum: parseVoluum, syncLog: parseSyncLog,
 };
 
@@ -105,7 +109,7 @@ function DatasetCard({ tab, result }: { tab: typeof SHEET_TABS[0]; result?: TabS
 
 export function ImportData() {
   const { data, settings, updateSettings, updateTableData, syncState, syncSheet } = useApp();
-  const [sheetInput, setSheetInput] = useState(settings.sheet_id);
+  const [sheetInput, setSheetInput] = useState(getActiveSpreadsheetId(settings));
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Advanced CSV upload state
@@ -118,10 +122,29 @@ export function ImportData() {
     syncState.results.map((r) => [r.key, r])
   ) as Record<DataTableKey, TabSyncResult | undefined>;
 
+  useEffect(() => {
+    setSheetInput(getActiveSpreadsheetId(settings));
+  }, [settings]);
+
   const handleSync = () => {
     const id = extractSheetId(sheetInput);
     if (!id) return;
-    if (id !== settings.sheet_id) {
+    const activeSource = getActiveAccountSource(settings);
+    if (activeSource && id !== activeSource.spreadsheet_id) {
+      updateSettings({
+        ...settings,
+        sheet_id: id,
+        account_sources: settings.account_sources.map((source) =>
+          source.id === activeSource.id
+            ? makeAccountSource({
+              ...source,
+              spreadsheet_id: id,
+              spreadsheet_url: sheetInput.startsWith('http') ? sheetInput : source.spreadsheet_url,
+            })
+            : source
+        ),
+      });
+    } else if (!activeSource && id !== settings.sheet_id) {
       updateSettings({ ...settings, sheet_id: id });
     }
     syncSheet(id);
@@ -136,13 +159,13 @@ export function ImportData() {
     try {
       const rows = await parseCSV(await file.text());
       if (!rows.length) { setCsvStatuses((p) => ({ ...p, [key]: { status: 'error', msg: 'File is empty.' } })); return; }
-      const parsed = CSV_PARSERS[key](rows);
+      const parsed = addActiveAccountScope(CSV_PARSERS[key](rows), settings);
       updateTableData(key, parsed, `file:${file.name}`);
       setCsvStatuses((p) => ({ ...p, [key]: { status: 'success', msg: `${parsed.length.toLocaleString()} rows imported` } }));
     } catch (e) {
       setCsvStatuses((p) => ({ ...p, [key]: { status: 'error', msg: String(e) } }));
     }
-  }, [updateTableData]);
+  }, [settings, updateTableData]);
 
   const handleUrlImport = useCallback(async (key: DataTableKey) => {
     const url = urlInputs[key]?.trim();
@@ -153,13 +176,13 @@ export function ImportData() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const rows = await parseCSV(await res.text());
       if (!rows.length) { setCsvStatuses((p) => ({ ...p, [key]: { status: 'error', msg: 'No data rows found.' } })); return; }
-      const parsed = CSV_PARSERS[key](rows);
+      const parsed = addActiveAccountScope(CSV_PARSERS[key](rows), settings);
       updateTableData(key, parsed, `url:${url}`);
       setCsvStatuses((p) => ({ ...p, [key]: { status: 'success', msg: `${parsed.length.toLocaleString()} rows imported` } }));
     } catch (e) {
       setCsvStatuses((p) => ({ ...p, [key]: { status: 'error', msg: String(e) } }));
     }
-  }, [urlInputs, updateTableData]);
+  }, [settings, urlInputs, updateTableData]);
 
   const handleClearAll = () => {
     if (window.confirm('Clear all imported data? This cannot be undone.')) {
@@ -207,6 +230,11 @@ export function ImportData() {
             <label className="block text-xs font-medium text-gray-700 mb-1.5">
               Google Sheet URL or Sheet ID
             </label>
+            {settings.account_sources.length > 0 && (
+              <p className="text-xs text-gray-500 mb-1.5">
+                Sync target: {getActiveAccountSource(settings)?.account_name ?? 'No enabled account selected'}
+              </p>
+            )}
             <div className="flex gap-2">
               <input
                 type="text"
