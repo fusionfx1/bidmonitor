@@ -1,21 +1,13 @@
 # Latest Handoff
 
-## Current State
-Harness P2B local account-scoped refactor is in place.
+## 2026-06-28 — BID_FEED_TOKEN Rotation
+- Status: PASS
+- Report: [[handoffs/bid-feed-token-rotation-2026-06-28]]
+- New feed token is active in Supabase and Google Ads Script property.
+- Verification: new token returned HTTP 200; invalid token returned HTTP 403.
+- Repo remained clean; no token was committed or documented.
 
-## Do Not Do
-- Do not deploy
-- Do not db push
-- Do not change function secrets
-- Do not mutate Google Ads
-- Do not expose Voluum secrets
-
-## Next Task
-Implement Harness foundation locally only:
-- sync_runs or sheet_import_runs abstraction
-- dashboard sync indicator
-- scoped helpers
-- cross-account isolation tests
-
-## Required Report
-Use `.repo-plugins/handoff-template.md`
+## Safety Reminders
+- Do not change function secrets without owner approval.
+- Do not expose Voluum secrets or feed tokens.
+- Keep default mode `review_only` unless owner explicitly approves otherwise.
