@@ -61,18 +61,24 @@ describe('P2C runtime scripts contract', () => {
     );
   });
 
-  it('uses exporter.gs as canonical Ads script and bridge.gs as canonical Apps Script', () => {
+  it('uses canonical runtime scripts with a single Google Ads dispatcher', () => {
     const adsScriptPath = resolve(repoRoot, 'scripts/google-ads/exporter.gs');
+    const adsRunnerPath = resolve(repoRoot, 'scripts/google-ads/runner.gs');
+    const applierPath = resolve(repoRoot, 'scripts/google-ads/applier.gs');
     const bridgePath = resolve(repoRoot, 'scripts/apps-script/bridge.gs');
     const legacyAdsPath = resolve(repoRoot, 'scripts/google-ads/p2c-data-puller.gs.js');
     const legacyBridgePath = resolve(repoRoot, 'scripts/google-apps/p2c-sheet-bridge.gs.js');
 
     expect(existsSync(adsScriptPath)).toBe(true);
+    expect(existsSync(adsRunnerPath)).toBe(true);
+    expect(existsSync(applierPath)).toBe(true);
     expect(existsSync(bridgePath)).toBe(true);
     expect(existsSync(legacyAdsPath)).toBe(true);
     expect(existsSync(legacyBridgePath)).toBe(true);
 
     const adsScript = readFileSync(adsScriptPath, 'utf8');
+    const adsRunnerScript = readFileSync(adsRunnerPath, 'utf8');
+    const applierScript = readFileSync(applierPath, 'utf8');
     const bridgeScript = readFileSync(bridgePath, 'utf8');
     const legacyAdsScript = readFileSync(legacyAdsPath, 'utf8');
     const legacyBridgeScript = readFileSync(legacyBridgePath, 'utf8');
@@ -93,10 +99,31 @@ describe('P2C runtime scripts contract', () => {
     expect(adsScript).toContain('LOOKBACK_DAYS');
     expect(adsScript).toContain('ACCOUNT_TIMEZONE');
     expect(adsScript).toContain('DRY_RUN');
+    expect(adsScript).toContain('DEFAULT_SHEET_ID');
+    expect(adsScript).toContain("PropertiesService.getScriptProperties().getProperty('P2C_SHEET_ID') || DEFAULT_SHEET_ID");
     expect(adsScript).toContain("String(config.DRY_RUN || 'true').toLowerCase() !== 'false'");
     expect(adsScript).toContain('PropertiesService');
     expect(adsScript).toContain('dry_run=true would write');
     expect(adsScript).toContain('appendSyncLog');
+    expect(adsScript).toContain('function runExporter()');
+    expect(adsScript).not.toMatch(/\bfunction\s+main\s*\(/);
+
+    expect(adsRunnerScript).toContain("var P2C_RUNTIME_DEFAULT_WORKFLOW = 'exporter'");
+    expect(adsRunnerScript).toContain('function main()');
+    expect(adsRunnerScript).toContain('runExporter();');
+    expect(adsRunnerScript).toContain('runApplier();');
+    expect(adsRunnerScript).toContain("workflow === 'all'");
+
+    expect(applierScript).toContain('function runApplier()');
+    expect(applierScript).not.toMatch(/\bfunction\s+main\s*\(/);
+    expect(applierScript).toContain("['APPLIER_ENABLED', 'false'");
+    expect(applierScript).toContain("['MODE', 'review_only'");
+    expect(applierScript).toContain("['DRY_RUN', 'true'");
+    expect(applierScript).toContain("['ALLOW_LIVE_MUTATION', 'false'");
+    expect(applierScript).toContain("['MAX_CHANGES_PER_RUN', '0'");
+    expect(applierScript).toContain('p2cApplierShouldDryRun');
+    expect(applierScript).toContain("mode !== 'manual_apply'");
+    expect(applierScript).toContain('!liveMutationAllowed');
     expect(bridgeScript).toContain('BIDMONITOR_BRIDGE_TOKEN');
     expect(bridgeScript).toContain('generated_at');
     expect(bridgeScript).toContain('served_at');

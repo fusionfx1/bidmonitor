@@ -9,6 +9,7 @@ var DEFAULT_TIMEZONE = 'Asia/Bangkok';
 var DEFAULT_LOOKBACK_DAYS = 30;
 var DEFAULT_MAX_ROWS = 50000;
 var DEFAULT_LIMIT = 10000;
+var DEFAULT_SHEET_ID = '1E-JsqNy9mrgt-d4-O6ZkvFUpi6Ud6ugtljhRvD3hpK0';
 
 var TABS = {
   config: {
@@ -130,9 +131,10 @@ var TABS = {
   },
 };
 
-function main() {
+function runExporter() {
   var startedAt = new Date();
-  var spreadsheet = SpreadsheetApp.openById(requiredProperty('P2C_SHEET_ID'));
+  var spreadsheetId = PropertiesService.getScriptProperties().getProperty('P2C_SHEET_ID') || DEFAULT_SHEET_ID;
+  var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
   var config = readConfigSafe(spreadsheet);
   var limits = buildLimits(config);
   var context = buildContext(config, spreadsheet);
@@ -413,10 +415,9 @@ function policyRows(context, limits) {
 
 function pmaxChannelRows(context, range, limits) {
   return queryRows([
-    "SELECT segments.date, campaign.id, campaign.name, asset_group.id, asset_group.name,",
-    "segments.asset_interaction_target.asset, metrics.impressions, metrics.clicks, metrics.cost_micros,",
+    "SELECT segments.date, campaign.id, campaign.name, metrics.impressions, metrics.clicks, metrics.cost_micros,",
     "metrics.conversions, metrics.conversions_value",
-    "FROM asset_group",
+    "FROM campaign",
     "WHERE campaign.advertising_channel_type = 'PERFORMANCE_MAX' AND " + whereDateRangeForString(range),
     'ORDER BY segments.date DESC',
     'LIMIT ' + limits.limit,
@@ -427,16 +428,16 @@ function pmaxChannelRows(context, range, limits) {
       stringValue(row.campaign.id), stringValue(row.campaign.name),
       numberValue(row.metrics.impressions), numberValue(row.metrics.clicks), costMicros, microsToCurrency(costMicros),
       numberValue(row.metrics.conversions), numberValue(row.metrics.conversionsValue),
-      stringValue(row.assetGroup.id), stringValue(row.assetGroup.name),
-      stringValue(row.segments.assetInteractionTarget && row.segments.assetInteractionTarget.asset || 'unknown'),
+      '', '',
+      'PERFORMANCE_MAX',
     ];
   });
 }
 
 function pmaxTermRows(context, range, limits) {
   return queryRows([
-    "SELECT segments.date, campaign.id, campaign.name, asset_group.id, asset_group.name,",
-    "campaign_search_term_view.search_term, campaign_search_term_view.status, metrics.impressions, metrics.clicks,",
+    "SELECT segments.date, campaign.id, campaign.name, campaign_search_term_view.search_term,",
+    "segments.search_term_match_source, metrics.impressions, metrics.clicks,",
     "metrics.cost_micros, metrics.conversions, metrics.conversions_value",
     "FROM campaign_search_term_view",
     "WHERE campaign.advertising_channel_type = 'PERFORMANCE_MAX' AND " + whereDateRangeForString(range),
@@ -449,8 +450,8 @@ function pmaxTermRows(context, range, limits) {
       stringValue(row.campaign.id), stringValue(row.campaign.name),
       numberValue(row.metrics.impressions), numberValue(row.metrics.clicks), costMicros, microsToCurrency(costMicros),
       numberValue(row.metrics.conversions), numberValue(row.metrics.conversionsValue),
-      stringValue(row.assetGroup && row.assetGroup.id || ''), stringValue(row.assetGroup && row.assetGroup.name || ''),
-      stringValue(row.campaignSearchTermView.searchTerm), stringValue(row.campaignSearchTermView.status),
+      '', '',
+      stringValue(row.campaignSearchTermView.searchTerm), stringValue(row.segments.searchTermMatchSource),
     ];
   });
 }
@@ -458,8 +459,8 @@ function pmaxTermRows(context, range, limits) {
 function geoRows(context, range, limits) {
   return queryRows([
     "SELECT segments.date, campaign.id, campaign.name, geographic_view.country_criterion_id,",
-    "geographic_view.location_type, segments.geo_target_country, segments.geo_target_region, segments.geo_target_city,",
-    "metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value",
+    "geographic_view.location_type, metrics.impressions, metrics.clicks, metrics.cost_micros,",
+    "metrics.conversions, metrics.conversions_value",
     "FROM geographic_view",
     whereDateRange(range),
     'ORDER BY segments.date DESC',
@@ -471,8 +472,8 @@ function geoRows(context, range, limits) {
       stringValue(row.campaign.id), stringValue(row.campaign.name),
       numberValue(row.metrics.impressions), numberValue(row.metrics.clicks), costMicros, microsToCurrency(costMicros),
       numberValue(row.metrics.conversions), numberValue(row.metrics.conversionsValue),
-      stringValue(row.geographicView.countryCriterionId), stringValue(row.segments.geoTargetCountry),
-      stringValue(row.segments.geoTargetRegion), stringValue(row.segments.geoTargetCity),
+      stringValue(row.geographicView.countryCriterionId), stringValue(row.geographicView.locationType),
+      '', '',
     ];
   });
 }
@@ -521,23 +522,30 @@ function budgetRows(context, range, limits) {
 
 function conversionActionRows(context, range, limits) {
   return queryRows([
-    "SELECT segments.date, campaign.id, campaign.name, conversion_action.id, conversion_action.name,",
-    "conversion_action.category, conversion_action.primary_for_goal, conversion_action.include_in_conversions_metric,",
+    "SELECT segments.date, campaign.id, campaign.name, segments.conversion_action,",
+    "segments.conversion_action_name, segments.conversion_action_category,",
     "metrics.conversions, metrics.conversions_value, metrics.all_conversions",
-    "FROM conversion_action",
+    "FROM campaign",
     whereDateRange(range),
     'ORDER BY segments.date DESC',
     'LIMIT ' + limits.limit,
   ].join(' '), limits, function (row) {
     return [
       row.segments.date, context.accountId, context.customerId, context.sourceSheetId,
-      stringValue(row.campaign && row.campaign.id || ''), stringValue(row.campaign && row.campaign.name || ''),
-      stringValue(row.conversionAction.id), stringValue(row.conversionAction.name),
-      stringValue(row.conversionAction.category), booleanValue(row.conversionAction.primaryForGoal),
-      booleanValue(row.conversionAction.includeInConversionsMetric),
+      stringValue(row.campaign.id), stringValue(row.campaign.name),
+      resourceId(row.segments.conversionAction), stringValue(row.segments.conversionActionName),
+      stringValue(row.segments.conversionActionCategory), '',
+      '',
       numberValue(row.metrics.conversions), numberValue(row.metrics.conversionsValue), numberValue(row.metrics.allConversions),
     ];
   });
+}
+
+function resourceId(resourceName) {
+  var value = stringValue(resourceName);
+  if (!value) return '';
+  var parts = value.split('/');
+  return parts[parts.length - 1] || value;
 }
 
 function queryRows(query, limits, mapper) {
