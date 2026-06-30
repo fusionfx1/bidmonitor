@@ -1,6 +1,7 @@
 import type { DataTableKey } from '../types';
 import { getCurrentImportTabs } from './dataContract/contract';
 import { GENERATED_TAB_ALIASES, normalizeGeneratedRows } from './generatedSheetAdapter';
+import { isLiveApiKey } from './importSources';
 import {
   parseCampaigns, parseAdGroups, parseKeywords, parseSearchTerms,
   parseHourDevice, parsePolicy, parseAuctionCampaigns, parseAuctionKeywords,
@@ -18,14 +19,16 @@ export interface SheetTab {
   normalizeRows?: (rows: Record<string, unknown>[]) => any[];
 }
 
-export const SHEET_TABS: SheetTab[] = getCurrentImportTabs().map((tab) => ({
-  tabName: tab.tabName,
-  aliases: GENERATED_TAB_ALIASES[tab.key] ?? [],
-  key: tab.key,
-  label: tab.label,
-  optional: tab.optional,
-  normalizeRows: (rows) => normalizeGeneratedRows(tab.key, rows),
-}));
+export const SHEET_TABS: SheetTab[] = getCurrentImportTabs()
+  .filter((tab) => !isLiveApiKey(tab.key))
+  .map((tab) => ({
+    tabName: tab.tabName,
+    aliases: GENERATED_TAB_ALIASES[tab.key] ?? [],
+    key: tab.key,
+    label: tab.label,
+    optional: tab.optional,
+    normalizeRows: (rows) => normalizeGeneratedRows(tab.key, rows),
+  }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const SHEET_PARSERS: Record<DataTableKey, (rows: any[]) => any[]> = {
