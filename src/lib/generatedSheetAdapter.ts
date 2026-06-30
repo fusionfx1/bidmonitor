@@ -1,0 +1,178 @@
+import type { DataTableKey, Settings, SyncLogStatus } from '../types';
+import { makeAccountSource } from './accountSources';
+
+export const GENERATED_SETTINGS_TAB = '_settings_global';
+
+export const GENERATED_TAB_ALIASES: Partial<Record<DataTableKey, string[]>> = {
+  campaigns: ['raw_campaign_daily'],
+  adGroups: ['raw_ad_group_daily', 'raw_adgroup_daily'],
+  keywords: ['raw_keyword_daily'],
+  searchTerms: ['raw_search_term_daily', 'raw_search_terms_daily'],
+  hourDevice: ['raw_hour_device_daily'],
+  policy: ['raw_policy_ad_daily', 'raw_policy_ads', 'raw_ads_policy'],
+  auctionCampaigns: ['raw_auction_campaign_daily', 'raw_auction_proxy_campaigns'],
+  auctionKeywords: ['raw_auction_keyword_daily', 'raw_auction_proxy_keywords'],
+  pmaxPerformance: ['raw_pmax_asset_group_daily', 'raw_pmax_performance'],
+  geoPerformance: ['raw_geo_performance', 'raw_geo_daily'],
+  placementPerformance: ['raw_placement_performance', 'raw_placement_daily'],
+  syncLog: ['_sync_runs'],
+};
+
+type RawRow = Record<string, unknown>;
+
+function str(value: unknown): string {
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
+function num(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = Number(String(value).replace(/[%,]/g, '').trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function first(row: RawRow, keys: string[]): unknown {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+  }
+  return '';
+}
+
+function cost(row: RawRow): number {
+  const direct = first(row, ['cost', 'cost_thb']);
+  if (direct !== '') return num(direct);
+  const micros = first(row, ['cost_micros', 'metrics_cost_micros']);
+  return micros === '' ? 0 : num(micros) / 1_000_000;
+}
+
+function metricRows(rows: RawRow[]): RawRow[] {
+  return rows.map((row) => {
+    const clicks = num(row.clicks);
+    const impressions = num(row.impressions);
+    const rowCost = cost(row);
+    const conversions = num(first(row, ['conversions', 'all_conversions']));
+    const conversionValue = num(first(row, ['conversion_value', 'conversions_value', 'value']));
+
+    return {
+      ...row,
+      campaign_name: first(row, ['campaign_name', 'campaign']),
+      campaign_status: first(row, ['campaign_status', 'status']),
+      channel: first(row, ['channel', 'advertising_channel_type']),
+      bidding_strategy_type: first(row, ['bidding_strategy_type', 'bid_strategy_type']),
+      daily_budget: first(row, ['daily_budget', 'budget']) || 0,
+      cost: rowCost,
+      ctr: first(row, ['ctr']) || (impressions ? clicks / impressions : 0),
+      avg_cpc: first(row, ['avg_cpc']) || (clicks ? rowCost / clicks : 0),
+      conversions,
+      all_conversions: first(row, ['all_conversions']) || conversions,
+      conversion_value: conversionValue,
+    };
+  });
+}
+
+function keywordRows(rows: RawRow[]): RawRow[] {
+  return metricRows(rows).map((row) => ({
+    ...row,
+    keyword_key: first(row, ['keyword_key']) || [row.campaign_id, row.ad_group_id, row.criterion_id].map(str).join(':'),
+    keyword: first(row, ['keyword', 'keyword_text']),
+    match_type: first(row, ['match_type', 'keyword_match_type']),
+    keyword_status: first(row, ['keyword_status', 'status']),
+    keyword_cpc_bid: first(row, ['keyword_cpc_bid', 'cpc_bid']) || 0,
+  }));
+}
+
+function syncRows(rows: RawRow[]): RawRow[] {
+  return rows.map((row) => {
+    const status = str(first(row, ['status'])).toUpperCase();
+    const normalizedStatus: SyncLogStatus = status === 'OK' || status === 'SUCCESS'
+      ? 'SUCCESS'
+      : status === 'PARTIAL' || status === 'WARNING'
+        ? 'PARTIAL'
+        : 'FAILED';
+
+    return {
+      run_id: first(row, ['run_id', 'sync_run_id', 'id']),
+      started_at: first(row, ['started_at', 'start_time']),
+      finished_at: first(row, ['finished_at', 'completed_at', 'end_time']),
+      status: normalizedStatus,
+      duration_seconds: num(first(row, ['duration_seconds'])) || num(first(row, ['duration_ms'])) / 1000,
+      trigger_type: first(row, ['trigger_type', 'triggered_by']),
+      lookback_days: first(row, ['lookback_days']),
+      tabs_updated: first(row, ['tabs_updated', 'jobs_run']),
+      campaign_rows: first(row, ['campaign_rows']),
+      adgroup_rows: first(row, ['adgroup_rows', 'ad_group_rows']),
+      keyword_rows: first(row, ['keyword_rows']),
+      search_term_rows: first(row, ['search_term_rows']),
+      hour_device_rows: first(row, ['hour_device_rows']),
+      policy_rows: first(row, ['policy_rows']),
+      auction_campaign_rows: first(row, ['auction_campaign_rows']),
+      auction_keyword_rows: first(row, ['auction_keyword_rows']),
+      voluum_rows: first(row, ['voluum_rows']),
+      error_message: first(row, ['error_message', 'errors']),
+      script_version: first(row, ['script_version']),
+    };
+  });
+}
+
+export function normalizeGeneratedRows(key: DataTableKey, rows: RawRow[]): RawRow[] {
+  if (key === 'syncLog') return syncRows(rows);
+  if (key === 'keywords' || key === 'auctionKeywords') return keywordRows(rows);
+  if (key === 'searchTerms') {
+    return metricRows(rows).map((row) => ({
+      ...row,
+      search_term: first(row, ['search_term', 'term']),
+      search_term_status: first(row, ['search_term_status', 'status']),
+    }));
+  }
+  if (key === 'adGroups') {
+    return metricRows(rows).map((row) => ({
+      ...row,
+      ad_group_status: first(row, ['ad_group_status', 'status']),
+      ad_group_cpc_bid: first(row, ['ad_group_cpc_bid', 'cpc_bid']) || 0,
+    }));
+  }
+  if (key === 'hourDevice') return metricRows(rows);
+  if (key === 'campaigns' || key === 'auctionCampaigns' || key === 'pmaxPerformance' || key === 'geoPerformance' || key === 'placementPerformance') {
+    return metricRows(rows);
+  }
+  return rows;
+}
+
+export function mergeGeneratedSheetSettings(
+  current: Settings,
+  settingsRows: RawRow[],
+  spreadsheetId: string,
+  rawSheetInput: string
+): Settings {
+  const values = Object.fromEntries(settingsRows.map((row) => [str(row.key), str(row.value)]));
+  const accountId = values.account_id || values.customer_id;
+  const customerId = values.customer_id || values.account_id;
+
+  if (!accountId || !customerId || !spreadsheetId) return current;
+
+  const source = makeAccountSource({
+    account_id: accountId,
+    customer_id: customerId,
+    account_name: values.account_name || values.project_name || accountId,
+    spreadsheet_id: spreadsheetId,
+    spreadsheet_url: rawSheetInput.startsWith('http') ? rawSheetInput : '',
+    timezone: values.timezone || current.account_sources.find((candidate) => candidate.spreadsheet_id === spreadsheetId)?.timezone,
+    currency: values.currency || current.currency,
+    enabled: true,
+  });
+
+  const sources = [
+    ...current.account_sources.filter((candidate) => candidate.id !== source.id),
+    source,
+  ];
+
+  return {
+    ...current,
+    currency: source.currency || current.currency,
+    account_id: source.account_id,
+    customer_id: source.customer_id,
+    sheet_id: spreadsheetId,
+    account_sources: sources,
+    selected_account_source_id: source.id,
+  };
+}
