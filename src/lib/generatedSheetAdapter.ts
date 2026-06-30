@@ -1,4 +1,4 @@
-import type { DataTableKey, Settings, SyncLogStatus } from '../types';
+import type { DataTableKey, Settings, SyncLogStatus, VoluumConversionMetric, VoluumMatchMode } from '../types';
 import { makeAccountSource } from './accountSources';
 import { normalizeDateValue } from './dateUtils';
 
@@ -169,6 +169,14 @@ function settingsObject(rows: RawRow[]): Record<string, string> {
   return Object.fromEntries(rows.map((row) => [str(row.key), str(row.value)]));
 }
 
+function conversionMetric(value: string, fallback: VoluumConversionMetric): VoluumConversionMetric {
+  return value === 'revenue_conversions' || value === 'conversions' ? value : fallback;
+}
+
+function matchMode(value: string, fallback: VoluumMatchMode): VoluumMatchMode {
+  return value === 'strict' || value === 'all' || value === 'auto' ? value : fallback;
+}
+
 export function mergeGeneratedSheetSettings(
   current: Settings,
   settingsRows: RawRow[],
@@ -211,6 +219,8 @@ export function mergeGeneratedSheetSettings(
 export function mergeGeneratedDashboardSettings(current: Settings, settingsRows: RawRow[]): Settings {
   const values = settingsObject(settingsRows);
   const accountName = values.DASHBOARD_ACCOUNT_NAME || values.dashboard_account_name;
+  const requestedConversionMetric = values.VOLUUM_CONVERSION_METRIC || values.voluum_conversion_metric;
+  const requestedMatchMode = values.VOLUUM_MATCH_MODE || values.voluum_match_mode;
 
   const nextSources = accountName
     ? current.account_sources.map((source) => source.id === current.selected_account_source_id
@@ -222,7 +232,7 @@ export function mergeGeneratedDashboardSettings(current: Settings, settingsRows:
     ...current,
     account_sources: nextSources,
     voluum_campaign_filter: values.VOLUUM_CAMPAIGN_FILTER || values.voluum_campaign_filter || current.voluum_campaign_filter,
-    voluum_conversion_metric: values.VOLUUM_CONVERSION_METRIC || values.voluum_conversion_metric || current.voluum_conversion_metric,
-    voluum_match_mode: values.VOLUUM_MATCH_MODE || values.voluum_match_mode || current.voluum_match_mode,
+    voluum_conversion_metric: conversionMetric(requestedConversionMetric, current.voluum_conversion_metric),
+    voluum_match_mode: matchMode(requestedMatchMode, current.voluum_match_mode),
   };
 }
