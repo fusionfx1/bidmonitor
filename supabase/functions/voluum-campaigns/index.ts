@@ -2,24 +2,48 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { CORS_HEADERS, corsResponse, corsError } from "../_shared/cors.ts";
 import { hasCredentials, voluumFetch, getCachedReport, setCachedReport } from "../_shared/voluumClient.ts";
 
-const TZ = (Deno.env.get("VOLUUM_TIMEZONE") ?? "Asia/Bangkok").replace(/^UTC\+7$/, "Asia/Bangkok");
+type CampaignLike = Record<string, unknown> & {
+  id?: string;
+  name?: string;
+  status?: string;
+  state?: string;
+  archived?: boolean;
+  deleted?: boolean;
+  campaign?: { id?: string; name?: string; status?: string; archived?: boolean; deleted?: boolean };
+};
 
-// Voluum requires times rounded to the nearest hour (no min/sec)
-function hourFloor(d: Date): string {
-  d.setMinutes(0, 0, 0);
-  return d.toISOString().replace(/\.\d{3}Z$/, ".000Z");
+function rowsFromPayload(payload: unknown): CampaignLike[] {
+  if (Array.isArray(payload)) return payload as CampaignLike[];
+  if (!payload || typeof payload !== "object") return [];
+  const obj = payload as Record<string, unknown>;
+  for (const key of ["rows", "campaigns", "items", "data"]) {
+    if (Array.isArray(obj[key])) return obj[key] as CampaignLike[];
+  }
+  const embedded = obj._embedded;
+  if (embedded && typeof embedded === "object") {
+    const embeddedObj = embedded as Record<string, unknown>;
+    for (const key of ["campaigns", "items", "data"]) {
+      if (Array.isArray(embeddedObj[key])) return embeddedObj[key] as CampaignLike[];
+    }
+  }
+  return [];
 }
 
-function defaultFrom(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return hourFloor(d);
+function statusText(row: CampaignLike): string {
+  return String(row.status ?? row.state ?? row.campaign?.status ?? "").trim().toUpperCase();
 }
 
-function defaultTo(): string {
-  const d = new Date();
-  d.setHours(d.getHours() + 1);
-  return hourFloor(d);
+function archivedFlag(row: CampaignLike): boolean {
+  return Boolean(row.archived || row.deleted || row.campaign?.archived || row.campaign?.deleted);
+}
+
+function isActiveCampaign(row: CampaignLike): boolean {
+  if (archivedFlag(row)) return false;
+  const status = statusText(row);
+  if (!status) return true;
+  if (["ACTIVE", "RUNNING", "LIVE", "ENABLED"].some((value) => status.includes(value))) return true;
+  if (["ARCHIV", "DELETED", "DISABLED", "INACTIVE", "PAUSED", "STOPPED", "REMOVED"].some((value) => status.includes(value))) return false;
+  return true;
 }
 
 Deno.serve(async (req) => {
@@ -30,10 +54,8 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const from = url.searchParams.get("from") ?? defaultFrom();
-  const to   = url.searchParams.get("to")   ?? defaultTo();
-
-  const cacheKey = `campaigns:${from}:${to}`;
+  const statusFilter = url.searchParams.get("status") === "all" ? "all" : "active";
+  const cacheKey = `campaign-metadata:${statusFilter}`;
   const cached = getCachedReport(cacheKey);
   if (cached) {
     return new Response(JSON.stringify(cached), {
@@ -41,12 +63,20 @@ Deno.serve(async (req) => {
     });
   }
 
-  const params = new URLSearchParams({
-    from, to, tz: TZ, groupBy: "campaign", limit: "500", sort: "cost", direction: "desc",
-  });
-
   try {
-    const data = await voluumFetch(`/report?${params}`);
+    const payload = await voluumFetch<unknown>("/campaign");
+    const allRows = rowsFromPayload(payload);
+    const rows = statusFilter === "active" ? allRows.filter(isActiveCampaign) : allRows;
+    const base = payload && typeof payload === "object" && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : {};
+    const data = {
+      ...base,
+      rows,
+      totalRows: rows.length,
+      source: "campaign-metadata",
+      statusFilter,
+    };
     setCachedReport(cacheKey, data);
     return new Response(JSON.stringify(data), {
       headers: { ...CORS_HEADERS, "Content-Type": "application/json", "X-Cache": "MISS" },
