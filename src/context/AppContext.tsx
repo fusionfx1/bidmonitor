@@ -1,9 +1,14 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import type { ImportedData, Settings, ApprovalStatus, DataTableKey, SyncState, TabSyncResult } from '../types';
-import { loadData, saveTableData, loadBidApprovals, saveBidApprovals, loadNegApprovals, saveNegApprovals } from '../store/dataStore';
+import { loadData, saveTableData, clearTableData, loadBidApprovals, saveBidApprovals, loadNegApprovals, saveNegApprovals } from '../store/dataStore';
 import { loadSettings, saveSettings } from '../store/settingsStore';
 import { SHEET_TABS, SHEET_PARSERS, extractSheetId, fetchTabAsCSV } from '../lib/googleSheets';
-import { GENERATED_SETTINGS_TAB, mergeGeneratedSheetSettings } from '../lib/generatedSheetAdapter';
+import {
+  GENERATED_DASHBOARD_SETTINGS_TAB,
+  GENERATED_SETTINGS_TAB,
+  mergeGeneratedDashboardSettings,
+  mergeGeneratedSheetSettings,
+} from '../lib/generatedSheetAdapter';
 import { parseCSV } from '../lib/csv/parser';
 import { addActiveAccountScope, getActiveAccountScope, getActiveSpreadsheetId } from '../lib/accountSources';
 import type { AccountSourceScope } from '../lib/accountSources';
@@ -89,58 +94,84 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const generatedSettings = await fetchTabAsCSV(sheetId, GENERATED_SETTINGS_TAB);
       if (generatedSettings.csv) {
         const settingsRows = await parseCSV(generatedSettings.csv);
-        const mergedSettings = mergeGeneratedSheetSettings(syncSettings, settingsRows, sheetId, rawId);
-        syncSettings = mergedSettings;
-        if (JSON.stringify(mergedSettings) !== JSON.stringify(settings)) {
-          saveSettings(mergedSettings);
-          setSettings(mergedSettings);
-        }
+        syncSettings = mergeGeneratedSheetSettings(syncSettings, settingsRows, sheetId, rawId);
+      }
+
+      const dashboardSettings = await fetchTabAsCSV(sheetId, GENERATED_DASHBOARD_SETTINGS_TAB);
+      if (dashboardSettings.csv) {
+        const dashboardRows = await parseCSV(dashboardSettings.csv);
+        syncSettings = mergeGeneratedDashboardSettings(syncSettings, dashboardRows);
+      }
+
+      if (JSON.stringify(syncSettings) !== JSON.stringify(settings)) {
+        saveSettings(syncSettings);
+        setSettings(syncSettings);
       }
     } catch {
       // Generated settings are helpful but not required; raw data rows can still provide scope.
     }
 
     const syncScope = getActiveAccountScope(syncSettings);
+    const results: TabSyncResult[] = [];
 
-    const results: TabSyncResult[] = await Promise.all(
-      SHEET_TABS.map(async (tab): Promise<TabSyncResult> => {
-        const base = { key: tab.key, tabName: tab.tabName, label: tab.label, optional: tab.optional };
-        const aliases = tab.aliases ?? [];
-        const candidates = Array.from(new Set([...aliases, tab.tabName]));
-        try {
-          let tabName = candidates[0];
-          let result = await fetchTabAsCSV(sheetId, tabName);
-          for (const candidate of candidates.slice(1)) {
-            if (result.error !== 'missing' && result.csv) break;
-            const nextResult = await fetchTabAsCSV(sheetId, candidate);
-            if (nextResult.error !== 'missing') {
-              tabName = candidate;
-              result = nextResult;
-            }
+    for (const tab of SHEET_TABS) {
+      const base = { key: tab.key, tabName: tab.tabName, label: tab.label, optional: tab.optional };
+      const aliases = tab.aliases ?? [];
+      const candidates = Array.from(new Set([...aliases, tab.tabName]));
+
+      try {
+        let tabName = candidates[0];
+        let result = await fetchTabAsCSV(sheetId, tabName);
+        for (const candidate of candidates.slice(1)) {
+          if (result.error !== 'missing' && result.csv) break;
+          const nextResult = await fetchTabAsCSV(sheetId, candidate);
+          if (nextResult.error !== 'missing') {
+            tabName = candidate;
+            result = nextResult;
           }
-
-          if (result.error === 'private') return { ...base, tabName, status: 'private', error: result.message ?? undefined };
-          if (result.error === 'missing')  return { ...base, tabName, status: 'missing', error: result.message ?? undefined };
-          if (result.error || !result.csv) return { ...base, tabName, status: 'error',   error: result.message ?? 'Unknown error' };
-          const rawRows = await parseCSV(result.csv);
-          if (!rawRows.length) return { ...base, tabName, status: 'missing' };
-          const normalizedRows = tab.normalizeRows?.(rawRows) ?? rawRows;
-          const rowScope = syncScope ?? inferAccountScopeFromRows(normalizedRows, sheetId);
-          if (!syncScope && rowScope && !inferredScope) inferredScope = rowScope;
-          const parsedRows = SHEET_PARSERS[tab.key](normalizedRows);
-          const parsed = rowScope
-            ? applyAccountScope(parsedRows, rowScope)
-            : addActiveAccountScope(parsedRows, syncSettings);
-          saveTableData(tab.key, parsed, `sheet:${sheetId}/${tabName}`);
-          return { ...base, tabName, status: 'synced', rows: parsed.length };
-        } catch (err) {
-          return { ...base, status: 'error', error: String(err) };
         }
-      })
-    );
+
+        if (result.error === 'private') {
+          clearTableData(tab.key, `sheet:${sheetId}/${tabName}:private`);
+          results.push({ ...base, tabName, status: 'private', error: result.message ?? undefined });
+          continue;
+        }
+        if (result.error === 'missing') {
+          clearTableData(tab.key, `sheet:${sheetId}/${tabName}:missing`);
+          results.push({ ...base, tabName, status: 'missing', error: result.message ?? undefined });
+          continue;
+        }
+        if (result.error || !result.csv) {
+          clearTableData(tab.key, `sheet:${sheetId}/${tabName}:error`);
+          results.push({ ...base, tabName, status: 'error', error: result.message ?? 'Unknown error' });
+          continue;
+        }
+
+        const rawRows = await parseCSV(result.csv);
+        if (!rawRows.length) {
+          clearTableData(tab.key, `sheet:${sheetId}/${tabName}:empty`);
+          results.push({ ...base, tabName, status: 'missing' });
+          continue;
+        }
+
+        const normalizedRows = tab.normalizeRows?.(rawRows) ?? rawRows;
+        const rowScope = syncScope ?? inferAccountScopeFromRows(normalizedRows, sheetId);
+        if (!syncScope && rowScope && !inferredScope) inferredScope = rowScope;
+        const parsedRows = SHEET_PARSERS[tab.key](normalizedRows);
+        const parsed = rowScope
+          ? applyAccountScope(parsedRows, rowScope)
+          : addActiveAccountScope(parsedRows, syncSettings);
+        saveTableData(tab.key, parsed, `sheet:${sheetId}/${tabName}`);
+        results.push({ ...base, tabName, status: 'synced', rows: parsed.length });
+      } catch (err) {
+        clearTableData(tab.key, `sheet:${sheetId}/${tab.tabName}:error`);
+        results.push({ ...base, status: 'error', error: String(err) });
+      }
+    }
 
     if (!syncScope && inferredScope) {
       const scopedSettings = ensureAccountSourceForScope(syncSettings, inferredScope, rawId);
+      syncSettings = scopedSettings;
       saveSettings(scopedSettings);
       setSettings(scopedSettings);
     }
@@ -162,11 +193,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (finalScope) {
       try {
-        const voluumRows = await fetchVoluumRowsForDashboard(finalScope);
+        const storedAfterSheet = loadData();
+        const voluumRows = await fetchVoluumRowsForDashboard(finalScope, {
+          campaigns: storedAfterSheet.campaigns,
+          settings: syncSettings,
+        });
         if (voluumRows.length > 0) {
-          saveTableData('voluum', voluumRows, 'voluum-api:last30/campaign');
+          saveTableData(
+            'voluum',
+            voluumRows,
+            `voluum-api:last30/campaign:${syncSettings.voluum_match_mode}:${syncSettings.voluum_conversion_metric}`
+          );
+        } else {
+          clearTableData('voluum', `voluum-api:last30/campaign:${syncSettings.voluum_match_mode}:empty-or-filtered`);
         }
       } catch (e) {
+        clearTableData('voluum', 'voluum-api:last30/campaign:error');
         console.warn('[BitMonitor] Voluum dashboard import skipped:', e);
       }
 
