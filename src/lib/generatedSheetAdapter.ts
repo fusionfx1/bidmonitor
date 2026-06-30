@@ -49,9 +49,9 @@ function cost(row: RawRow): number {
 }
 
 function syncStatus(value: unknown): SyncLogStatus {
-  const status = str(value).toUpperCase();
+  const status = str(value).toUpperCase().replaceAll(' ', '_').replaceAll('-', '_');
   if (status === 'OK' || status === 'SUCCESS') return 'SUCCESS';
-  if (status === 'PARTIAL' || status === 'WARNING') return 'PARTIAL';
+  if (['PARTIAL', 'WARNING', 'WARN', 'PARTIAL_ERROR', 'PARTIAL_ERRORS', 'ERRORS'].includes(status)) return 'PARTIAL';
   return 'FAILED';
 }
 
