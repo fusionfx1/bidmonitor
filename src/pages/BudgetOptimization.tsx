@@ -7,8 +7,11 @@ import { useApp } from '../context/AppContext';
 import { fmtCurrency } from '../lib/metrics/calculations';
 import { buildBudgetOptimization } from '../lib/budgetOptimization';
 import type { BudgetPacingRow, BudgetProposal, OptimizationPreset, ProfitCurvePoint } from '../lib/budgetOptimization';
+import { actionQueueBlockedReason, buildBudgetActionPackage, queueBudgetAction } from '../lib/actionQueue';
 
 const PRESETS: OptimizationPreset[] = ['none', 'conservative', 'balanced', 'aggressive'];
+
+type RowState = Record<string, string>;
 
 function statusVariant(status: string): 'green' | 'amber' | 'red' | 'gray' {
   if (status === 'over') return 'red';
@@ -52,7 +55,29 @@ function ProfitCurve({ points, currency }: { points: ProfitCurvePoint[]; currenc
 export function BudgetOptimization() {
   const { data, settings } = useApp();
   const [preset, setPreset] = useState<OptimizationPreset>('balanced');
+  const [rowState, setRowState] = useState<RowState>({});
   const model = useMemo(() => buildBudgetOptimization(data, settings, preset), [data, settings, preset]);
+  const blockedReason = actionQueueBlockedReason(settings);
+
+  const copyRow = async (row: BudgetProposal) => {
+    try {
+      await navigator.clipboard.writeText(buildBudgetActionPackage(row, settings).json);
+      setRowState((prev) => ({ ...prev, [row.id]: 'copied' }));
+      setTimeout(() => setRowState((prev) => ({ ...prev, [row.id]: '' })), 1500);
+    } catch (e) {
+      setRowState((prev) => ({ ...prev, [row.id]: String(e instanceof Error ? e.message : e) }));
+    }
+  };
+
+  const pushRow = async (row: BudgetProposal) => {
+    try {
+      setRowState((prev) => ({ ...prev, [row.id]: 'working' }));
+      await queueBudgetAction(row, settings);
+      setRowState((prev) => ({ ...prev, [row.id]: 'queued' }));
+    } catch (e) {
+      setRowState((prev) => ({ ...prev, [row.id]: String(e instanceof Error ? e.message : e) }));
+    }
+  };
 
   const pacingColumns = useMemo<Column<BudgetPacingRow>[]>(() => [
     { key: 'campaignName', label: 'Campaign', render: (row) => <span className="font-medium text-gray-900">{row.campaignName}</span> },
@@ -74,14 +99,15 @@ export function BudgetOptimization() {
     { key: 'deltaPercent', label: 'Delta', align: 'right', render: (row) => `${row.deltaPercent.toFixed(1)}%` },
     { key: 'projectedProfitDelta', label: 'Profit impact', align: 'right', render: (row) => fmtCurrency(row.projectedProfitDelta, settings.currency) },
     { key: 'reason', label: 'Reason', render: (row) => <span className="text-xs text-gray-500">{row.reason}</span>, sortable: false },
-    { key: 'proposalOnly', label: 'Scope', render: () => <Badge variant="blue">proposal only</Badge>, sortable: false },
-  ], [settings.currency]);
+    { key: 'proposalOnly', label: 'Scope', render: () => <Badge variant="blue">sheet queue</Badge>, sortable: false },
+    { key: 'queue', label: 'Queue', sortable: false, render: (row) => <div className="flex items-center gap-2"><button disabled={Boolean(blockedReason) || rowState[row.id] === 'working'} title={blockedReason ?? ''} onClick={(event) => { event.stopPropagation(); void pushRow(row); }} className="px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-40">{rowState[row.id] === 'working' ? 'Working' : rowState[row.id] === 'queued' ? 'Queued' : 'Queue'}</button><button onClick={(event) => { event.stopPropagation(); void copyRow(row); }} className="px-2 py-1 text-xs rounded border border-gray-200">{rowState[row.id] === 'copied' ? 'Copied' : 'Copy'}</button>{rowState[row.id] && !['working', 'queued', 'copied'].includes(rowState[row.id]) && <span className="text-xs text-red-600">{rowState[row.id]}</span>}</div> },
+  ], [blockedReason, rowState, settings]);
 
   return (
     <PageContainer>
       <PageHeader
         title="Budget Optimization"
-        description="Pacing, proposal-only budget optimization, and ProfitMax curve from local Google/Voluum data"
+        description="Pacing, sheet-queue budget optimization, and ProfitMax curve from local Google/Voluum data"
         actions={(
           <select value={preset} onChange={(event) => setPreset(event.target.value as OptimizationPreset)} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm">
             {PRESETS.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -107,7 +133,7 @@ export function BudgetOptimization() {
         <Card>
           <CardHeader title="Optimization proposals" />
           <CardBody>
-            <DataTable columns={proposalColumns} data={model.proposals} emptyMessage="No proposal-only budget changes for this preset." rowKey={(row) => row.id} />
+            <DataTable columns={proposalColumns} data={model.proposals} emptyMessage="No sheet-queue budget changes for this preset." rowKey={(row) => row.id} />
           </CardBody>
         </Card>
       </div>
@@ -120,7 +146,7 @@ export function BudgetOptimization() {
       </Card>
 
       <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800">
-        Optimization rows are proposal-only while action mode remains review-only. This page does not apply budget changes.
+        {blockedReason ? `Queue disabled: ${blockedReason}` : 'Queue enabled. Rows are written to the Google Sheet action queue.'}
       </div>
     </PageContainer>
   );
