@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
+import { APP_BUILD_ID, APP_VERSION_DISPLAY } from '../lib/appVersion';
 
 interface LayoutProps {
   children: ReactNode;
@@ -26,7 +27,15 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
     <div className="flex items-start justify-between mb-6">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+          <span
+            className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-medium text-gray-500 shadow-sm"
+            title={APP_BUILD_ID}
+          >
+            {APP_VERSION_DISPLAY}
+          </span>
+        </div>
         {description && <p className="text-sm text-gray-500 mt-0.5">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
