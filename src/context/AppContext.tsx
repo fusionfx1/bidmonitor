@@ -202,13 +202,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           saveTableData(
             'voluum',
             voluumRows,
-            `voluum-api:last30/campaign:${syncSettings.voluum_match_mode}:${syncSettings.voluum_conversion_metric}`
+            `voluum-api:last30/campaign:active:${syncSettings.voluum_match_mode}:${syncSettings.voluum_conversion_metric}`
           );
         } else {
-          clearTableData('voluum', `voluum-api:last30/campaign:${syncSettings.voluum_match_mode}:empty-or-filtered`);
+          clearTableData('voluum', `voluum-api:last30/campaign:active:${syncSettings.voluum_match_mode}:empty-or-filtered`);
         }
       } catch (e) {
-        clearTableData('voluum', 'voluum-api:last30/campaign:error');
+        clearTableData('voluum', 'voluum-api:last30/campaign:active:error');
         console.warn('[BitMonitor] Voluum dashboard import skipped:', e);
       }
 
