@@ -2,10 +2,10 @@ import type { ActionMode, DataTableKey, GoogleSyncLogRow, ImportedData, Settings
 import { getCurrentImportTabs } from './dataContract/contract';
 import { computeSyncHealth } from './syncHealth';
 
-export const SETTINGS_SCRIPT_VERSION = 'tm2-settings-health-v1';
-export const COPY_SCRIPT_UPDATE_VERSION = 'tm2-copy-settings-health-v1';
+export const SETTINGS_SCRIPT_VERSION = 'tm2-settings-health-v2-script-apply';
+export const COPY_SCRIPT_UPDATE_VERSION = 'tm2-copy-settings-health-v2-script-apply';
 
-export type SafeActionMode = Extract<ActionMode, 'review_only' | 'disabled'>;
+export type SafeActionMode = ActionMode;
 export type HealthTone = 'ok' | 'warn' | 'safe' | 'missing';
 
 export interface DataSourceStatus {
@@ -39,28 +39,14 @@ export interface SettingsHealth {
 }
 
 export const DANGER_ACTIONS = [
-  {
-    id: 'disable_automation',
-    label: 'Disable automation',
-    backendCall: 'none',
-    localSettingsWrite: true,
-  },
-  {
-    id: 'rotate_feed_token',
-    label: 'Rotate feed token',
-    backendCall: 'placeholder',
-    localSettingsWrite: false,
-  },
-  {
-    id: 'disconnect_account',
-    label: 'Disconnect account',
-    backendCall: 'placeholder',
-    localSettingsWrite: false,
-  },
+  { id: 'disable_automation', label: 'Disable automation', backendCall: 'none', localSettingsWrite: true },
+  { id: 'rotate_feed_token', label: 'Rotate feed token', backendCall: 'placeholder', localSettingsWrite: false },
+  { id: 'disconnect_account', label: 'Disconnect account', backendCall: 'placeholder', localSettingsWrite: false },
 ] as const;
 
 export function normalizeSafeActionMode(mode: string | null | undefined): SafeActionMode {
-  return mode === 'disabled' ? 'disabled' : 'review_only';
+  if (mode === 'disabled' || mode === 'dry_run' || mode === 'manual_apply') return mode;
+  return 'review_only';
 }
 
 export function maskSensitiveValue(value: string | null | undefined): string {
@@ -84,8 +70,9 @@ export function buildScriptUpdateCopy(settings: Settings, latestScriptVersion: s
     `Account mode: ${normalizeSafeActionMode(settings.action_mode)}`,
     `Currency: ${settings.currency || 'THB'}`,
     `Breakeven CPA: ${settings.payout}`,
-    'Keep Google Ads mutate calls disabled.',
-    'Keep backend-only credentials out of the frontend bundle.',
+    `Bridge endpoint: ${settings.bridge_endpoint_url ? 'configured' : 'missing'}`,
+    'Google Ads mutations are executed only by the Google Ads Script after approved Sheet queue rows are picked.',
+    'Keep raw bridge token and backend credentials out of screenshots.',
   ].join('\n');
 }
 
@@ -101,55 +88,53 @@ export function buildSettingsHealth(settings: Settings, data: ImportedData): Set
   const syncTone = syncHealthTone(health.freshnessStatus);
   const sourceCount = dataSources.filter((source) => source.rows > 0).length;
   const maskedSheet = maskSensitiveValue(settings.sheet_id);
-  const accountSourceCards =
-    settings.account_sources.length > 0
-      ? settings.account_sources.map((source) => ({
-          id: `account_source_${source.id}`,
-          title: source.account_name || source.account_id || 'Unnamed account source',
-          status: source.enabled ? 'Connected locally' : 'Disabled locally',
-          tone: source.enabled ? ('ok' as const) : ('safe' as const),
-          details: 'Account identity and Sheet source are local configuration only.',
-          values: [
-            { label: 'Customer ID', value: source.customer_id || 'missing' },
-            { label: 'Account ID', value: source.account_id || 'missing' },
-            { label: 'Sheet', value: maskSensitiveValue(source.spreadsheet_id || source.spreadsheet_url) },
-            { label: 'Schedule', value: settings.sheet_auto_refresh },
-          ],
-        }))
-      : [
-          {
-            id: 'account_source_missing',
-            title: 'No account source',
-            status: 'Not configured',
-            tone: 'missing' as const,
-            details: 'Add a local account source before syncing account-scoped feed rows.',
-            values: [
-              { label: 'Customer ID', value: 'missing' },
-              { label: 'Account ID', value: 'missing' },
-              { label: 'Sheet', value: 'not configured' },
-              { label: 'Schedule', value: settings.sheet_auto_refresh },
-            ],
-          },
-        ];
+  const accountSourceCards = settings.account_sources.length > 0
+    ? settings.account_sources.map((source) => ({
+        id: `account_source_${source.id}`,
+        title: source.account_name || source.account_id || 'Unnamed account source',
+        status: source.enabled ? 'Connected locally' : 'Disabled locally',
+        tone: source.enabled ? ('ok' as const) : ('safe' as const),
+        details: 'Account identity and Sheet source are local configuration only.',
+        values: [
+          { label: 'Customer ID', value: source.customer_id || 'missing' },
+          { label: 'Account ID', value: source.account_id || 'missing' },
+          { label: 'Sheet', value: maskSensitiveValue(source.spreadsheet_id || source.spreadsheet_url) },
+          { label: 'Schedule', value: settings.sheet_auto_refresh },
+        ],
+      }))
+    : [{
+        id: 'account_source_missing',
+        title: 'No account source',
+        status: 'Not configured',
+        tone: 'missing' as const,
+        details: 'Add a local account source before syncing account-scoped feed rows.',
+        values: [
+          { label: 'Customer ID', value: 'missing' },
+          { label: 'Account ID', value: 'missing' },
+          { label: 'Sheet', value: 'not configured' },
+          { label: 'Schedule', value: settings.sheet_auto_refresh },
+        ],
+      }];
 
   return {
     safeMode,
     automationDisabled: safeMode === 'disabled',
     latestScriptVersion,
     syncTone,
-    syncLabel:
-      health.totalRuns === 0
-        ? 'No script run log imported'
-        : `${health.lastStatus ?? 'UNKNOWN'} run, ${health.runsToday}/${health.expectedRunsToday} expected today`,
+    syncLabel: health.totalRuns === 0
+      ? 'No script run log imported'
+      : `${health.lastStatus ?? 'UNKNOWN'} run, ${health.runsToday}/${health.expectedRunsToday} expected today`,
     dataSources,
     accountCards: [
       ...accountSourceCards,
       {
         id: 'google_ads',
         title: 'Google Ads account',
-        status: safeMode === 'disabled' ? 'Disabled locally' : 'Review only',
-        tone: safeMode === 'disabled' ? 'safe' : 'ok',
-        details: 'Recommendations remain read-only; mutate paths stay disabled.',
+        status: labelForMode(safeMode),
+        tone: safeMode === 'disabled' ? 'safe' : safeMode === 'manual_apply' ? 'warn' : 'ok',
+        details: safeMode === 'manual_apply'
+          ? 'Approved queue rows can be picked by the Google Ads Script when Sheet-side mutate switch is enabled.'
+          : 'Recommendations remain review/script-queue controlled.',
         values: [
           { label: 'Mode', value: labelForMode(safeMode) },
           { label: 'Breakeven CPA', value: formatCurrency(settings.payout, settings.currency) },
@@ -167,6 +152,18 @@ export function buildSettingsHealth(settings: Settings, data: ImportedData): Set
           { label: 'Sheet ID / URL', value: maskedSheet },
           { label: 'Auto refresh', value: settings.sheet_auto_refresh },
           { label: 'Imported sources', value: `${sourceCount}/${dataSources.length}` },
+        ],
+      },
+      {
+        id: 'script_apply_bridge',
+        title: 'Script apply bridge',
+        status: settings.bridge_endpoint_url && settings.bridge_token ? 'Configured locally' : 'Not configured',
+        tone: settings.bridge_endpoint_url && settings.bridge_token ? 'warn' : 'missing',
+        details: 'Bridge writes approved rows into _budget_actions and _bid_actions. Google Ads Script applies later.',
+        values: [
+          { label: 'Endpoint', value: maskSensitiveValue(settings.bridge_endpoint_url) },
+          { label: 'Token', value: settings.bridge_token ? 'local secret configured' : 'missing' },
+          { label: 'Approver', value: settings.action_approved_by || 'dashboard-owner' },
         ],
       },
       {
@@ -207,17 +204,7 @@ function buildDataSourceStatus(
   const rows = meta?.rows ?? 0;
   const importedAt = meta?.importedAt ?? null;
   const source = meta?.source ?? null;
-
-  return {
-    key,
-    label,
-    tabName,
-    rows,
-    importedAt,
-    source,
-    optional,
-    tone: rows > 0 ? 'ok' : optional ? 'safe' : 'missing',
-  };
+  return { key, label, tabName, rows, importedAt, source, optional, tone: rows > 0 ? 'ok' : optional ? 'safe' : 'missing' };
 }
 
 function latestScriptVersionFrom(rows: GoogleSyncLogRow[]): string | null {
@@ -233,8 +220,11 @@ function syncHealthTone(status: string): HealthTone {
   return 'warn';
 }
 
-function labelForMode(mode: SafeActionMode): string {
-  return mode === 'disabled' ? 'Disabled' : 'Review only';
+export function labelForMode(mode: SafeActionMode): string {
+  if (mode === 'disabled') return 'Disabled';
+  if (mode === 'dry_run') return 'Dry run via script';
+  if (mode === 'manual_apply') return 'Manual apply via script';
+  return 'Review only';
 }
 
 function formatCurrency(value: number, currency: string): string {
