@@ -41,8 +41,8 @@ function isActiveCampaign(row: CampaignLike): boolean {
   if (archivedFlag(row)) return false;
   const status = statusText(row);
   if (!status) return true;
-  if (["ACTIVE", "RUNNING", "LIVE", "ENABLED"].some((value) => status.includes(value))) return true;
   if (["ARCHIV", "DELETED", "DISABLED", "INACTIVE", "PAUSED", "STOPPED", "REMOVED"].some((value) => status.includes(value))) return false;
+  if (["ACTIVE", "RUNNING", "LIVE", "ENABLED"].some((value) => status.includes(value))) return true;
   return true;
 }
 
