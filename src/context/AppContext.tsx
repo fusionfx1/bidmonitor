@@ -14,7 +14,7 @@ import { addActiveAccountScope, getActiveAccountScope, getActiveSpreadsheetId } 
 import type { AccountSourceScope } from '../lib/accountSources';
 import { applyAccountScope, ensureAccountSourceForScope, inferAccountScopeFromRows } from '../lib/accountScopeInference';
 import { recordSyncRun } from '../lib/syncRuns';
-import { fetchVoluumRowsForDashboard } from '../lib/voluum/dashboardImport';
+import { fetchVoluumDashboardImport } from '../lib/voluum/dashboardImport';
 
 interface AppContextValue {
   data: ImportedData;
@@ -31,6 +31,11 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+function voluumSource(settings: Settings, stats: { reportRows: number; activeCampaignRows: number; filteredInactiveRows: number; activeMetadataRows: number; allMetadataRows: number; metadataLoaded: boolean }): string {
+  const base = `voluum-api:last30/campaign:active:${settings.voluum_match_mode}:${settings.voluum_conversion_metric}`;
+  return `${base}:report=${stats.reportRows}:active=${stats.activeCampaignRows}:filtered=${stats.filteredInactiveRows}:metaActive=${stats.activeMetadataRows}:metaAll=${stats.allMetadataRows}:metaLoaded=${stats.metadataLoaded ? '1' : '0'}`;
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<ImportedData>(() => loadData());
@@ -194,18 +199,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (finalScope) {
       try {
         const storedAfterSheet = loadData();
-        const voluumRows = await fetchVoluumRowsForDashboard(finalScope, {
+        const voluumImport = await fetchVoluumDashboardImport(finalScope, {
           campaigns: storedAfterSheet.campaigns,
           settings: syncSettings,
         });
-        if (voluumRows.length > 0) {
-          saveTableData(
-            'voluum',
-            voluumRows,
-            `voluum-api:last30/campaign:active:${syncSettings.voluum_match_mode}:${syncSettings.voluum_conversion_metric}`
-          );
+        const source = voluumSource(syncSettings, voluumImport);
+        if (voluumImport.rows.length > 0) {
+          saveTableData('voluum', voluumImport.rows, source);
         } else {
-          clearTableData('voluum', `voluum-api:last30/campaign:active:${syncSettings.voluum_match_mode}:empty-or-filtered`);
+          clearTableData('voluum', `${source}:empty-or-filtered`);
         }
       } catch (e) {
         clearTableData('voluum', 'voluum-api:last30/campaign:active:error');
