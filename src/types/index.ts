@@ -138,19 +138,12 @@ export interface AuctionCampaignRow {
   campaign_status: string;
   serving_status: string;
   channel: string;
-  bidding_strategy_type: string;
-  impressions: number;
-  clicks: number;
-  cost: number;
-  conversions: number;
   search_impression_share: number;
   search_rank_lost_impression_share: number;
   search_budget_lost_impression_share: number;
   top_impression_percentage: number;
   absolute_top_impression_percentage: number;
-  search_top_impression_share: number;
-  search_absolute_top_impression_share: number;
-  bid_signal: string;
+  impression_share_signal: string;
 }
 
 export interface AuctionKeywordRow {
@@ -161,23 +154,15 @@ export interface AuctionKeywordRow {
   keyword_key: string;
   campaign_id: string;
   campaign_name: string;
-  bidding_strategy_type: string;
   ad_group_id: string;
   ad_group_name: string;
   criterion_id: string;
   keyword: string;
   match_type: string;
-  keyword_status: string;
-  impressions: number;
-  clicks: number;
-  cost: number;
-  conversions: number;
   search_impression_share: number;
   search_rank_lost_impression_share: number;
   top_impression_percentage: number;
   absolute_top_impression_percentage: number;
-  search_top_impression_share: number;
-  search_absolute_top_impression_share: number;
   bid_signal: string;
 }
 
@@ -186,24 +171,18 @@ export interface VoluumRow {
   customer_id?: string;
   source_sheet_id?: string;
   date: string;
-  keyword_key: string;
   campaign_id: string;
-  ad_group_id: string;
-  criterion_id: string;
-  voluum_visits: number;
-  voluum_clicks: number;
+  campaign_name: string;
+  keyword_key: string;
+  visits: number;
+  clicks: number;
   voluum_conversions: number;
   revenue: number;
   profit: number;
   roi: number;
 }
 
-export type SyncLogStatus = 'SUCCESS' | 'PARTIAL' | 'FAILED';
-
 export interface GoogleSyncLogRow {
-  account_id?: string;
-  customer_id?: string;
-  source_sheet_id?: string;
   run_id: string;
   started_at: string;
   finished_at: string;
@@ -225,6 +204,8 @@ export interface GoogleSyncLogRow {
   script_version: string;
 }
 
+export type SyncLogStatus = 'SUCCESS' | 'PARTIAL' | 'FAILED';
+
 export interface PmaxPerformanceRow {
   account_id?: string;
   customer_id?: string;
@@ -234,15 +215,15 @@ export interface PmaxPerformanceRow {
   campaign_name: string;
   asset_group_id: string;
   asset_group_name: string;
-  asset_id: string;
-  asset_type: string;
-  listing_group_filter: string;
+  asset_group_status: string;
   impressions: number;
   clicks: number;
   cost: number;
   conversions: number;
   conversion_value: number;
-  asset_signal: string;
+  profit: number;
+  roas: number;
+  pmax_signal: string;
   review_status: ApprovalStatus;
 }
 
@@ -253,10 +234,9 @@ export interface GeoPerformanceRow {
   date: string;
   campaign_id: string;
   campaign_name: string;
+  geo_target_constant_id: string;
   country_criterion_id: string;
-  country_code: string;
-  region: string;
-  city: string;
+  location_type: string;
   impressions: number;
   clicks: number;
   cost: number;
@@ -409,10 +389,10 @@ export type SheetAutoRefresh = 'off' | '15min' | '1hour';
 export type VoluumConversionMetric = 'conversions' | 'revenue_conversions';
 export type VoluumMatchMode = 'auto' | 'strict' | 'all';
 
-export type BidActionEntityLevel = 'campaign';
-export type BidActionFeedAction = 'SET_BUDGET' | 'PAUSE_CAMPAIGN' | 'ENABLE_CAMPAIGN' | 'SET_CAMPAIGN_LABEL';
-export type BidActionFeedMode = 'dry_run';
-export type BidActionFeedStatus = 'ready' | 'applied' | 'failed' | 'skipped' | 'stale';
+export type BidActionEntityLevel = 'campaign' | 'ad_group' | 'keyword';
+export type BidActionFeedAction = 'SET_BUDGET' | 'SET_KEYWORD_CPC' | 'SET_ADGROUP_CPC' | 'PAUSE_CAMPAIGN' | 'ENABLE_CAMPAIGN' | 'SET_CAMPAIGN_LABEL';
+export type BidActionFeedMode = 'dry_run' | 'manual_apply';
+export type BidActionFeedStatus = 'ready' | 'approved' | 'applied' | 'dry_run' | 'failed' | 'skipped' | 'stale';
 
 export interface AutoBidGuardrails {
   minBid: number;
@@ -524,6 +504,9 @@ export interface Settings {
   voluum_campaign_filter: string;
   voluum_conversion_metric: VoluumConversionMetric;
   voluum_match_mode: VoluumMatchMode;
+  bridge_endpoint_url: string;
+  bridge_token: string;
+  action_approved_by: string;
 }
 
 export const DEFAULT_AUTO_BID_GUARDRAILS: AutoBidGuardrails = {
@@ -562,6 +545,9 @@ export const DEFAULT_SETTINGS: Settings = {
   voluum_campaign_filter: '',
   voluum_conversion_metric: 'conversions',
   voluum_match_mode: 'auto',
+  bridge_endpoint_url: '',
+  bridge_token: '',
+  action_approved_by: 'dashboard-owner',
 };
 
 // ─── Google Sheet Sync ───────────────────────────────────────────────────────
