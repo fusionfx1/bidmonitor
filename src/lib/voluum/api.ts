@@ -1,5 +1,6 @@
 import type {
   VoluumRawReport, VoluumHealth, VoluumRecommendation, ReportParams,
+  VoluumCampaignsResponse, VoluumCampaignStatusFilter,
 } from './types';
 
 const SUPABASE_URL     = import.meta.env.VITE_SUPABASE_URL as string;
@@ -42,8 +43,8 @@ export async function fetchVoluumReport(params: ReportParams): Promise<VoluumRaw
   });
 }
 
-export async function fetchVoluumCampaigns(): Promise<VoluumRawReport> {
-  return callFunction<VoluumRawReport>('voluum-campaigns');
+export async function fetchVoluumCampaigns(status: VoluumCampaignStatusFilter = 'active'): Promise<VoluumCampaignsResponse> {
+  return callFunction<VoluumCampaignsResponse>('voluum-campaigns', { status });
 }
 
 export interface RecommendationResponse {
@@ -59,8 +60,8 @@ export async function fetchVoluumRecommendations(
     from:           params.from,
     to:             params.to,
     ...(params.minSpend       !== undefined ? { minSpend:       String(params.minSpend)       } : {}),
-    ...(params.minClicks      !== undefined ? { minClicks:      String(params.minClicks)       } : {}),
-    ...(params.minConversions !== undefined ? { minConversions: String(params.minConversions)  } : {}),
+    ...(params.minClicks      !== undefined ? { minClicks:      String(params.minClicks)      } : {}),
+    ...(params.minConversions !== undefined ? { minConversions: String(params.minConversions) } : {}),
   });
 }
 
