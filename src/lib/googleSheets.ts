@@ -1,5 +1,6 @@
 import type { DataTableKey } from '../types';
 import { getCurrentImportTabs } from './dataContract/contract';
+import { GENERATED_TAB_ALIASES, normalizeGeneratedRows } from './generatedSheetAdapter';
 import {
   parseCampaigns, parseAdGroups, parseKeywords, parseSearchTerms,
   parseHourDevice, parsePolicy, parseAuctionCampaigns, parseAuctionKeywords,
@@ -9,16 +10,21 @@ import {
 
 export interface SheetTab {
   tabName: string;
+  aliases?: string[];
   key: DataTableKey;
   label: string;
   optional?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  normalizeRows?: (rows: Record<string, unknown>[]) => any[];
 }
 
 export const SHEET_TABS: SheetTab[] = getCurrentImportTabs().map((tab) => ({
   tabName: tab.tabName,
+  aliases: GENERATED_TAB_ALIASES[tab.key] ?? [],
   key: tab.key,
   label: tab.label,
   optional: tab.optional,
+  normalizeRows: (rows) => normalizeGeneratedRows(tab.key, rows),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,7 +68,7 @@ export async function fetchTabAsCSV(sheetId: string, tabName: string): Promise<F
     `https://docs.google.com/spreadsheets/d/${sheetId}` +
     `/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
   try {
-    // credentials:'omit' is critical — without it, if the user is signed into
+    // credentials:'omit' is critical - without it, if the user is signed into
     // Google, the browser sends their session cookie and Google returns an HTML
     // "sign in to access" redirect instead of the public CSV.
     const res = await fetch(url, { credentials: 'omit' });
