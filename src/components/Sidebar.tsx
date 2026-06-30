@@ -12,6 +12,7 @@ import { computeBidDecisions } from '../lib/decisionEngine/bidDecisions';
 import { computeNegativeCandidates } from '../lib/decisionEngine/negativeCandidates';
 import { computePolicyIssues } from '../lib/decisionEngine/policyIssues';
 import { computeSyncHealth } from '../lib/syncHealth';
+import { APP_BUILD_ID, APP_VERSION_DISPLAY } from '../lib/appVersion';
 import type { FreshnessStatus } from '../lib/syncHealth';
 
 const navItems = [
@@ -118,7 +119,11 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="px-5 py-4 border-t border-gray-700/60">
+      <div className="px-5 py-4 border-t border-gray-700/60 space-y-2">
+        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500">
+          <span>Dashboard</span>
+          <span className="font-mono text-gray-400" title={APP_BUILD_ID}>{APP_VERSION_DISPLAY}</span>
+        </div>
         <p className="text-xs text-gray-600">Read-only monitoring. No bids are changed.</p>
       </div>
     </aside>
