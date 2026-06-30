@@ -6,6 +6,8 @@ import { SHEET_TABS, SHEET_PARSERS, extractSheetId, fetchTabAsCSV } from '../lib
 import { GENERATED_SETTINGS_TAB, mergeGeneratedSheetSettings } from '../lib/generatedSheetAdapter';
 import { parseCSV } from '../lib/csv/parser';
 import { addActiveAccountScope, getActiveAccountScope, getActiveSpreadsheetId } from '../lib/accountSources';
+import type { AccountSourceScope } from '../lib/accountSources';
+import { applyAccountScope, ensureAccountSourceForScope, inferAccountScopeFromRows } from '../lib/accountScopeInference';
 import { recordSyncRun } from '../lib/syncRuns';
 
 interface AppContextValue {
@@ -73,6 +75,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const startedAt = new Date().toISOString();
     let syncSettings = settings;
     let isGeneratedBitMonitorSheet = false;
+    let inferredScope: AccountSourceScope | null = null;
 
     setSyncState({
       running: true,
@@ -127,7 +130,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const rawRows = await parseCSV(result.csv);
           if (!rawRows.length) return { ...base, tabName, status: 'missing' };
           const normalizedRows = tabName === tab.tabName ? rawRows : tab.normalizeRows?.(rawRows) ?? rawRows;
-          const parsed = addActiveAccountScope(SHEET_PARSERS[tab.key](normalizedRows), syncSettings);
+          const rowScope = syncScope ?? inferAccountScopeFromRows(normalizedRows, sheetId);
+          if (!syncScope && rowScope && !inferredScope) inferredScope = rowScope;
+          const parsedRows = SHEET_PARSERS[tab.key](normalizedRows);
+          const parsed = rowScope
+            ? applyAccountScope(parsedRows, rowScope)
+            : addActiveAccountScope(parsedRows, syncSettings);
           saveTableData(tab.key, parsed, `sheet:${sheetId}/${tabName}`);
           return { ...base, tabName, status: 'synced', rows: parsed.length };
         } catch (err) {
@@ -135,6 +143,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       })
     );
+
+    if (!syncScope && inferredScope) {
+      const scopedSettings = ensureAccountSourceForScope(syncSettings, inferredScope, rawId);
+      syncSettings = scopedSettings;
+      saveSettings(scopedSettings);
+      setSettings(scopedSettings);
+    }
 
     // Detect if the sheet itself is inaccessible (all tabs returned private/error)
     const privateCount = results.filter((r) => r.status === 'private').length;
@@ -149,9 +164,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const hasMissing = results.some((r) => r.status === 'missing');
     const hasSynced = syncedRows > 0 || syncedTabs > 0;
     const syncStatus = hasError ? 'failed' : hasSynced && hasMissing ? 'warning' : hasSynced ? 'success' : 'warning';
+    const finalScope = syncScope ?? inferredScope;
 
-    if (syncScope) {
-      recordSyncRun(syncScope, {
+    if (finalScope) {
+      recordSyncRun(finalScope, {
         started_at: startedAt,
         finished_at: new Date().toISOString(),
         status: syncStatus,
