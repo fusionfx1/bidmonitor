@@ -45,6 +45,13 @@ function cost(row: RawRow): number {
   return micros === '' ? 0 : num(micros) / 1_000_000;
 }
 
+function syncStatus(value: unknown): SyncLogStatus {
+  const status = str(value).toUpperCase();
+  if (status === 'OK' || status === 'SUCCESS') return 'SUCCESS';
+  if (status === 'PARTIAL' || status === 'WARNING') return 'PARTIAL';
+  return 'FAILED';
+}
+
 function metricRows(rows: RawRow[]): RawRow[] {
   return rows.map((row) => {
     const clicks = num(row.clicks);
@@ -82,36 +89,27 @@ function keywordRows(rows: RawRow[]): RawRow[] {
 }
 
 function syncRows(rows: RawRow[]): RawRow[] {
-  return rows.map((row) => {
-    const status = str(first(row, ['status'])).toUpperCase();
-    const normalizedStatus: SyncLogStatus = status === 'OK' || status === 'SUCCESS'
-      ? 'SUCCESS'
-      : status === 'PARTIAL' || status === 'WARNING'
-        ? 'PARTIAL'
-        : 'FAILED';
-
-    return {
-      run_id: first(row, ['run_id', 'sync_run_id', 'id']),
-      started_at: first(row, ['started_at', 'start_time']),
-      finished_at: first(row, ['finished_at', 'completed_at', 'end_time']),
-      status: normalizedStatus,
-      duration_seconds: num(first(row, ['duration_seconds'])) || num(first(row, ['duration_ms'])) / 1000,
-      trigger_type: first(row, ['trigger_type', 'triggered_by']),
-      lookback_days: first(row, ['lookback_days']),
-      tabs_updated: first(row, ['tabs_updated', 'jobs_run']),
-      campaign_rows: first(row, ['campaign_rows']),
-      adgroup_rows: first(row, ['adgroup_rows', 'ad_group_rows']),
-      keyword_rows: first(row, ['keyword_rows']),
-      search_term_rows: first(row, ['search_term_rows']),
-      hour_device_rows: first(row, ['hour_device_rows']),
-      policy_rows: first(row, ['policy_rows']),
-      auction_campaign_rows: first(row, ['auction_campaign_rows']),
-      auction_keyword_rows: first(row, ['auction_keyword_rows']),
-      voluum_rows: first(row, ['voluum_rows']),
-      error_message: first(row, ['error_message', 'errors']),
-      script_version: first(row, ['script_version']),
-    };
-  });
+  return rows.map((row) => ({
+    run_id: first(row, ['run_id', 'sync_run_id', 'id']),
+    started_at: first(row, ['started_at', 'start_time']),
+    finished_at: first(row, ['finished_at', 'completed_at', 'end_time']),
+    status: syncStatus(first(row, ['status'])),
+    duration_seconds: num(first(row, ['duration_seconds'])) || num(first(row, ['duration_ms'])) / 1000,
+    trigger_type: first(row, ['trigger_type', 'triggered_by']),
+    lookback_days: first(row, ['lookback_days']),
+    tabs_updated: first(row, ['tabs_updated', 'jobs_run']),
+    campaign_rows: first(row, ['campaign_rows']),
+    adgroup_rows: first(row, ['adgroup_rows', 'ad_group_rows']),
+    keyword_rows: first(row, ['keyword_rows']),
+    search_term_rows: first(row, ['search_term_rows']),
+    hour_device_rows: first(row, ['hour_device_rows']),
+    policy_rows: first(row, ['policy_rows']),
+    auction_campaign_rows: first(row, ['auction_campaign_rows']),
+    auction_keyword_rows: first(row, ['auction_keyword_rows']),
+    voluum_rows: first(row, ['voluum_rows']),
+    error_message: first(row, ['error_message', 'errors']),
+    script_version: first(row, ['script_version']),
+  }));
 }
 
 export function normalizeGeneratedRows(key: DataTableKey, rows: RawRow[]): RawRow[] {
@@ -132,9 +130,16 @@ export function normalizeGeneratedRows(key: DataTableKey, rows: RawRow[]): RawRo
     }));
   }
   if (key === 'hourDevice') return metricRows(rows);
-  if (key === 'campaigns' || key === 'auctionCampaigns' || key === 'pmaxPerformance' || key === 'geoPerformance' || key === 'placementPerformance') {
-    return metricRows(rows);
-  }
+
+  const metricKeys: DataTableKey[] = [
+    'campaigns',
+    'auctionCampaigns',
+    'pmaxPerformance',
+    'geoPerformance',
+    'placementPerformance',
+  ];
+  if (metricKeys.includes(key)) return metricRows(rows);
+
   return rows;
 }
 
