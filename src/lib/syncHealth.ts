@@ -48,6 +48,7 @@ export function computeSyncHealth(rows: GoogleSyncLogRow[]): SyncHealth {
   const latest = sorted[0];
   const todayDate = new Date().toISOString().slice(0, 10);
   const runsToday = rows.filter((r) => r.started_at.slice(0, 10) === todayDate).length;
+  const expectedRunsToday = Math.max(hoursElapsedToday(), runsToday);
 
   const lastSuccessful = sorted.find((r) => r.status === 'SUCCESS' || r.status === 'PARTIAL') ?? null;
 
@@ -64,7 +65,7 @@ export function computeSyncHealth(rows: GoogleSyncLogRow[]): SyncHealth {
   return {
     totalRuns: rows.length,
     runsToday,
-    expectedRunsToday: hoursElapsedToday(),
+    expectedRunsToday,
     lastScriptRunAt: latest.started_at,
     lastSuccessfulScriptRunAt: lastSuccessful?.started_at ?? null,
     lastStatus: latest.status,
