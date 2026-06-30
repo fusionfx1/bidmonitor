@@ -61,6 +61,18 @@ export function saveTableData<T>(
   }
 }
 
+export function clearTableData(tableKey: DataTableKey, source = 'cleared:missing-source'): void {
+  const stored = loadData();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (stored as any)[tableKey] = [];
+  stored.meta[tableKey] = {
+    rows: 0,
+    importedAt: new Date().toISOString(),
+    source,
+  };
+  localStorage.setItem(DATA_KEY, JSON.stringify(stored));
+}
+
 export function loadTableMeta(): Partial<Record<DataTableKey, TableMeta>> {
   try {
     const d = loadData();
