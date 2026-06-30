@@ -406,6 +406,8 @@ export interface VoluumMismatchRow {
 
 export type ActionMode = 'disabled' | 'review_only' | 'dry_run' | 'manual_apply';
 export type SheetAutoRefresh = 'off' | '15min' | '1hour';
+export type VoluumConversionMetric = 'conversions' | 'revenue_conversions';
+export type VoluumMatchMode = 'auto' | 'strict' | 'all';
 
 export type BidActionEntityLevel = 'campaign';
 export type BidActionFeedAction = 'SET_BUDGET' | 'PAUSE_CAMPAIGN' | 'ENABLE_CAMPAIGN' | 'SET_CAMPAIGN_LABEL';
@@ -519,6 +521,9 @@ export interface Settings {
   customer_id: string;
   sheet_id: string;
   sheet_auto_refresh: SheetAutoRefresh;
+  voluum_campaign_filter: string;
+  voluum_conversion_metric: VoluumConversionMetric;
+  voluum_match_mode: VoluumMatchMode;
 }
 
 export const DEFAULT_AUTO_BID_GUARDRAILS: AutoBidGuardrails = {
@@ -554,6 +559,9 @@ export const DEFAULT_SETTINGS: Settings = {
   customer_id: '',
   sheet_id: '',
   sheet_auto_refresh: 'off',
+  voluum_campaign_filter: '',
+  voluum_conversion_metric: 'conversions',
+  voluum_match_mode: 'auto',
 };
 
 // ─── Google Sheet Sync ───────────────────────────────────────────────────────
@@ -618,21 +626,9 @@ export type DataTableKey =
 
 // ─── KPIs ────────────────────────────────────────────────────────────────────
 
-export interface OverviewKPIs {
-  totalSpend: number;
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  avgCpc: number;
-  googleConversions: number;
-  voluumConversions: number;
-  revenue: number;
-  profit: number;
-  roi: number;
-  cpa: number;
-  policyIssuesCount: number;
-  bidActionsPending: number;
-  negativeCandidatesCount: number;
-  campaignsRankLost: number;
-  campaignsBudgetLost: number;
+export interface KpiCard {
+  label: string;
+  value: string;
+  change?: string;
+  tone?: 'green' | 'red' | 'gray' | 'amber';
 }
