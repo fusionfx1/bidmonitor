@@ -24,11 +24,22 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
+  const isOverview = title === 'MCC Overview';
+  const displayTitle = isOverview ? 'Account Overview' : title;
+  const displayDescription = isOverview
+    ? 'Single-account read-only control view from imported Google Ads and active Voluum data'
+    : description;
+
   return (
     <div className="flex items-start justify-between mb-6">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+          <h1 className="text-xl font-bold text-gray-900">{displayTitle}</h1>
+          {isOverview && (
+            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+              Single account mode
+            </span>
+          )}
           <span
             className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-medium text-gray-500 shadow-sm"
             title={APP_BUILD_ID}
@@ -36,7 +47,7 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
             {APP_VERSION_DISPLAY}
           </span>
         </div>
-        {description && <p className="text-sm text-gray-500 mt-0.5">{description}</p>}
+        {displayDescription && <p className="text-sm text-gray-500 mt-0.5">{displayDescription}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
     </div>
