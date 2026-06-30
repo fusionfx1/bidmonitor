@@ -74,7 +74,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!sheetId) return;
     const startedAt = new Date().toISOString();
     let syncSettings = settings;
-    let isGeneratedBitMonitorSheet = false;
     let inferredScope: AccountSourceScope | null = null;
 
     setSyncState({
@@ -87,7 +86,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const generatedSettings = await fetchTabAsCSV(sheetId, GENERATED_SETTINGS_TAB);
-      isGeneratedBitMonitorSheet = Boolean(generatedSettings.csv && !generatedSettings.error);
       if (generatedSettings.csv) {
         const settingsRows = await parseCSV(generatedSettings.csv);
         const mergedSettings = mergeGeneratedSheetSettings(syncSettings, settingsRows, sheetId, rawId);
@@ -98,7 +96,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch {
-      isGeneratedBitMonitorSheet = false;
+      // Generated settings are helpful but not required; raw data rows can still provide scope.
     }
 
     const syncScope = getActiveAccountScope(syncSettings);
@@ -107,11 +105,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       SHEET_TABS.map(async (tab): Promise<TabSyncResult> => {
         const base = { key: tab.key, tabName: tab.tabName, label: tab.label, optional: tab.optional };
         const aliases = tab.aliases ?? [];
-        const candidates = Array.from(new Set(
-          isGeneratedBitMonitorSheet
-            ? [...aliases, tab.tabName]
-            : [tab.tabName, ...aliases]
-        ));
+        const candidates = Array.from(new Set([...aliases, tab.tabName]));
         try {
           let tabName = candidates[0];
           let result = await fetchTabAsCSV(sheetId, tabName);
@@ -146,7 +140,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (!syncScope && inferredScope) {
       const scopedSettings = ensureAccountSourceForScope(syncSettings, inferredScope, rawId);
-      syncSettings = scopedSettings;
       saveSettings(scopedSettings);
       setSettings(scopedSettings);
     }
