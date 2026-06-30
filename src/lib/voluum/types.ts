@@ -4,8 +4,11 @@ export interface VoluumRawRow {
   // Flat variant
   campaignId?: string;
   campaignName?: string;
+  campaignStatus?: string;
+  status?: string;
+  archived?: boolean;
   // Nested variant
-  campaign?: { id?: string; name?: string; status?: string };
+  campaign?: { id?: string; name?: string; status?: string; archived?: boolean };
   name?: string;
   id?: string;
   // Metrics (always present, but may be null/undefined)
@@ -30,6 +33,30 @@ export interface VoluumRawReport {
   totalRows?: number;
   credentialsMissing?: boolean;
 }
+
+export interface VoluumCampaignMeta {
+  id?: string;
+  campaignId?: string;
+  name?: string;
+  campaignName?: string;
+  status?: string;
+  state?: string;
+  archived?: boolean;
+  deleted?: boolean;
+  campaign?: { id?: string; name?: string; status?: string; archived?: boolean; deleted?: boolean };
+  [key: string]: unknown;
+}
+
+export interface VoluumCampaignsResponse {
+  rows?: VoluumCampaignMeta[];
+  campaigns?: VoluumCampaignMeta[];
+  items?: VoluumCampaignMeta[];
+  data?: VoluumCampaignMeta[];
+  totalRows?: number;
+  credentialsMissing?: boolean;
+}
+
+export type VoluumCampaignStatusFilter = 'active' | 'all';
 
 // ─── Normalized row (safe for UI consumption) ─────────────────────────────────
 
