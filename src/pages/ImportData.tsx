@@ -113,6 +113,15 @@ function DatasetCard({ tab, result }: { tab: SheetTab; result?: TabSyncResult })
   );
 }
 
+function CountLine({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span className="text-gray-500">{label}</span>
+      <span className={value !== null ? 'font-medium text-gray-800' : 'text-gray-400'}>{value !== null ? value.toLocaleString() : '—'}</span>
+    </div>
+  );
+}
+
 function LiveApiImportCard({ status }: { status: ReturnType<typeof getVoluumLiveImportStatus> }) {
   const ok = status.status === 'synced';
   return (
@@ -139,6 +148,11 @@ function LiveApiImportCard({ status }: { status: ReturnType<typeof getVoluumLive
       </div>
       <div className="text-xs text-emerald-700 font-medium">
         {ok ? `${status.rows.toLocaleString()} rows imported` : 'No live API rows imported into Overview yet'}
+      </div>
+      <div className="mt-3 space-y-1 rounded-lg bg-white/60 p-2">
+        <CountLine label="Report rows before filter" value={status.reportRows} />
+        <CountLine label="Active rows used" value={status.activeCampaignRows} />
+        <CountLine label="Archived/inactive filtered" value={status.filteredInactiveRows} />
       </div>
       {status.importedAt && (
         <div className="text-xs text-gray-400 mt-1">Last import {relativeTime(status.importedAt)}</div>
