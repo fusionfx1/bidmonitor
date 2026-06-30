@@ -9,6 +9,7 @@ import { addActiveAccountScope, getActiveAccountScope, getActiveSpreadsheetId } 
 import type { AccountSourceScope } from '../lib/accountSources';
 import { applyAccountScope, ensureAccountSourceForScope, inferAccountScopeFromRows } from '../lib/accountScopeInference';
 import { recordSyncRun } from '../lib/syncRuns';
+import { fetchVoluumRowsForDashboard } from '../lib/voluum/dashboardImport';
 
 interface AppContextValue {
   data: ImportedData;
@@ -160,6 +161,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const finalScope = syncScope ?? inferredScope;
 
     if (finalScope) {
+      try {
+        const voluumRows = await fetchVoluumRowsForDashboard(finalScope);
+        if (voluumRows.length > 0) {
+          saveTableData('voluum', voluumRows, 'voluum-api:last30/campaign');
+        }
+      } catch (e) {
+        console.warn('[BitMonitor] Voluum dashboard import skipped:', e);
+      }
+
       recordSyncRun(finalScope, {
         started_at: startedAt,
         finished_at: new Date().toISOString(),
