@@ -1,4 +1,4 @@
-import type { CampaignRow, GoogleSyncLogRow, ImportedData, Settings, VoluumRow } from '../types';
+import type { ActionMode, CampaignRow, GoogleSyncLogRow, ImportedData, Settings, VoluumRow } from '../types';
 import { normalizeAccountSources } from './accountSources';
 import { normalizeSafeActionMode } from './settingsHealth';
 import { computeSyncHealth, computeVoluumFreshness } from './syncHealth';
@@ -64,7 +64,7 @@ export interface MccDashboardModel {
   summaryCards: MccSummaryCard[];
   accountRows: MccAccountRow[];
   freshness: MccFreshnessIndicator[];
-  visibleActionMode: 'review_only' | 'disabled';
+  visibleActionMode: ActionMode;
   totalAlerts: number;
   hasVoluum: boolean;
 }
@@ -341,6 +341,5 @@ function normalizedDate(value: string): string | null {
 }
 
 function keyFromParts(accountId?: string, customerId?: string, sourceSheetId?: string): string {
-  const key = [accountId, customerId, sourceSheetId].map((part) => part?.trim() || 'missing').join('|');
-  return key.toLowerCase();
+  return [accountId || 'missing', customerId || 'missing', sourceSheetId || 'missing'].join(' / ');
 }
