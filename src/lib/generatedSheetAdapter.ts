@@ -15,6 +15,7 @@ export const GENERATED_TAB_ALIASES: Partial<Record<DataTableKey, string[]>> = {
   pmaxPerformance: ['raw_pmax_asset_group_daily', 'raw_pmax_performance'],
   geoPerformance: ['raw_geo_performance', 'raw_geo_daily'],
   placementPerformance: ['raw_placement_performance', 'raw_placement_daily'],
+  voluum: ['raw_voluum_performance', 'raw_voluum_report'],
   syncLog: ['_sync_runs'],
 };
 
@@ -88,6 +89,23 @@ function keywordRows(rows: RawRow[]): RawRow[] {
   }));
 }
 
+function voluumRows(rows: RawRow[]): RawRow[] {
+  return rows.map((row) => ({
+    ...row,
+    date: first(row, ['date', 'visit_date_bkk', 'postback_date_bkk', 'profit_date_bkk']),
+    keyword_key: first(row, ['keyword_key', 'keyword', 'custom_variable_1', 'var1']),
+    campaign_id: first(row, ['campaign_id', 'voluum_campaign_id', 'campaign']),
+    ad_group_id: first(row, ['ad_group_id', 'adgroup_id']),
+    criterion_id: first(row, ['criterion_id', 'keyword_id']),
+    voluum_visits: first(row, ['voluum_visits', 'visits']),
+    voluum_clicks: first(row, ['voluum_clicks', 'clicks']),
+    voluum_conversions: first(row, ['voluum_conversions', 'conversions', 'cv', 'conversions_count']),
+    revenue: first(row, ['revenue', 'total_revenue', 'conversion_value', 'payout']),
+    profit: first(row, ['profit', 'true_profit']),
+    roi: first(row, ['roi']),
+  }));
+}
+
 function syncRows(rows: RawRow[]): RawRow[] {
   return rows.map((row) => ({
     run_id: first(row, ['run_id', 'sync_run_id', 'id']),
@@ -114,6 +132,7 @@ function syncRows(rows: RawRow[]): RawRow[] {
 
 export function normalizeGeneratedRows(key: DataTableKey, rows: RawRow[]): RawRow[] {
   if (key === 'syncLog') return syncRows(rows);
+  if (key === 'voluum') return voluumRows(rows);
   if (key === 'keywords' || key === 'auctionKeywords') return keywordRows(rows);
   if (key === 'searchTerms') {
     return metricRows(rows).map((row) => ({
