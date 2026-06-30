@@ -123,7 +123,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (result.error || !result.csv) return { ...base, tabName, status: 'error',   error: result.message ?? 'Unknown error' };
           const rawRows = await parseCSV(result.csv);
           if (!rawRows.length) return { ...base, tabName, status: 'missing' };
-          const normalizedRows = tabName === tab.tabName ? rawRows : tab.normalizeRows?.(rawRows) ?? rawRows;
+          const normalizedRows = tab.normalizeRows?.(rawRows) ?? rawRows;
           const rowScope = syncScope ?? inferAccountScopeFromRows(normalizedRows, sheetId);
           if (!syncScope && rowScope && !inferredScope) inferredScope = rowScope;
           const parsedRows = SHEET_PARSERS[tab.key](normalizedRows);
