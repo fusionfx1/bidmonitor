@@ -33,7 +33,7 @@ export function DiagnosticsV2() {
 
   const hasSheetData = data.campaigns.length > 0;
   const hasVoluumRows = voluumImport.status === 'synced';
-  const liveMode = Boolean(voluumHealth?.connected && hasSheetData && hasVoluumRows);
+  const liveMode = Boolean(hasSheetData && hasVoluumRows);
 
   return (
     <PageContainer>
