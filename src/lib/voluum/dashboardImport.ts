@@ -11,9 +11,20 @@ interface DashboardVoluumContext {
 
 interface ActiveCampaignIndex {
   loaded: boolean;
-  count: number;
+  activeMetadataRows: number;
+  allMetadataRows: number;
   ids: Set<string>;
   names: Set<string>;
+}
+
+export interface DashboardVoluumImportResult {
+  rows: VoluumRow[];
+  reportRows: number;
+  activeCampaignRows: number;
+  filteredInactiveRows: number;
+  activeMetadataRows: number;
+  allMetadataRows: number;
+  metadataLoaded: boolean;
 }
 
 function norm(value: string): string {
@@ -42,17 +53,22 @@ function campaignMetaName(row: VoluumCampaignMeta): string {
 
 async function fetchActiveCampaignIndex(): Promise<ActiveCampaignIndex> {
   try {
-    const response = await fetchVoluumCampaigns('active');
-    const rows = campaignMetaRows(response);
+    const [activeResponse, allResponse] = await Promise.all([
+      fetchVoluumCampaigns('active'),
+      fetchVoluumCampaigns('all'),
+    ]);
+    const activeRows = campaignMetaRows(activeResponse);
+    const allRows = campaignMetaRows(allResponse);
     return {
       loaded: true,
-      count: rows.length,
-      ids: new Set(rows.map((row) => compactDigits(campaignMetaId(row))).filter(Boolean)),
-      names: new Set(rows.map((row) => norm(campaignMetaName(row))).filter(Boolean)),
+      activeMetadataRows: activeRows.length,
+      allMetadataRows: allRows.length || activeRows.length,
+      ids: new Set(activeRows.map((row) => compactDigits(campaignMetaId(row))).filter(Boolean)),
+      names: new Set(activeRows.map((row) => norm(campaignMetaName(row))).filter(Boolean)),
     };
   } catch (e) {
     console.warn('[BitMonitor] Active Voluum campaign metadata unavailable; using report rows:', e);
-    return { loaded: false, count: 0, ids: new Set(), names: new Set() };
+    return { loaded: false, activeMetadataRows: 0, allMetadataRows: 0, ids: new Set(), names: new Set() };
   }
 }
 
@@ -107,10 +123,29 @@ function selectedConversions(row: NormalizedVoluumRow, settings?: Settings): num
   return row.conversions;
 }
 
-export async function fetchVoluumRowsForDashboard(
+function toVoluumRow(row: NormalizedVoluumRow, scope: AccountSourceScope, reportDate: string, settings?: Settings): VoluumRow {
+  return {
+    account_id: scope.account_id,
+    customer_id: scope.customer_id,
+    source_sheet_id: scope.source_sheet_id,
+    date: reportDate,
+    keyword_key: row.campaignId || row.campaignName,
+    campaign_id: row.campaignId,
+    ad_group_id: '',
+    criterion_id: '',
+    voluum_visits: row.visits,
+    voluum_clicks: row.clicks,
+    voluum_conversions: selectedConversions(row, settings),
+    revenue: row.revenue,
+    profit: row.profit,
+    roi: row.roi,
+  };
+}
+
+export async function fetchVoluumDashboardImport(
   scope: AccountSourceScope,
   context: DashboardVoluumContext = {}
-): Promise<VoluumRow[]> {
+): Promise<DashboardVoluumImportResult> {
   const settings = context.settings;
   const { from, to } = resolveDateRange('last30');
   const [raw, activeCampaigns] = await Promise.all([
@@ -139,20 +174,21 @@ export async function fetchVoluumRowsForDashboard(
     settings?.voluum_match_mode ?? 'auto'
   );
 
-  return accountFiltered.map((row): VoluumRow => ({
-    account_id: scope.account_id,
-    customer_id: scope.customer_id,
-    source_sheet_id: scope.source_sheet_id,
-    date: reportDate,
-    keyword_key: row.campaignId || row.campaignName,
-    campaign_id: row.campaignId,
-    ad_group_id: '',
-    criterion_id: '',
-    voluum_visits: row.visits,
-    voluum_clicks: row.clicks,
-    voluum_conversions: selectedConversions(row, settings),
-    revenue: row.revenue,
-    profit: row.profit,
-    roi: row.roi,
-  }));
+  return {
+    rows: accountFiltered.map((row) => toVoluumRow(row, scope, reportDate, settings)),
+    reportRows: normalized.length,
+    activeCampaignRows: activeOnly.length,
+    filteredInactiveRows: Math.max(0, normalized.length - activeOnly.length),
+    activeMetadataRows: activeCampaigns.activeMetadataRows,
+    allMetadataRows: activeCampaigns.allMetadataRows,
+    metadataLoaded: activeCampaigns.loaded,
+  };
+}
+
+export async function fetchVoluumRowsForDashboard(
+  scope: AccountSourceScope,
+  context: DashboardVoluumContext = {}
+): Promise<VoluumRow[]> {
+  const result = await fetchVoluumDashboardImport(scope, context);
+  return result.rows;
 }
