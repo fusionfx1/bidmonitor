@@ -30,10 +30,11 @@ export function sourceTabName(source?: string): string | null {
 function voluumSourceLabel(source: string, isApi: boolean): string {
   if (!source) return 'Not imported yet';
   if (!isApi) return 'Google Sheet fallback / voluum_performance';
-  if (source.includes('empty-or-filtered')) return 'Voluum API / last30 / campaign / empty or filtered';
-  if (source.includes('strict')) return 'Voluum API / last30 / campaign / strict match';
-  if (source.includes('all')) return 'Voluum API / last30 / campaign / all rows';
-  return 'Voluum API / last30 / campaign / auto match';
+  const activeLabel = source.includes(':active') ? ' / active only' : '';
+  if (source.includes('empty-or-filtered')) return `Voluum API / last30 / campaign${activeLabel} / empty or filtered`;
+  if (source.includes('strict')) return `Voluum API / last30 / campaign${activeLabel} / strict match`;
+  if (source.includes('all')) return `Voluum API / last30 / campaign${activeLabel} / all rows`;
+  return `Voluum API / last30 / campaign${activeLabel} / auto match`;
 }
 
 export function getVoluumLiveImportStatus(data: ImportedData): LiveApiImportStatus {
