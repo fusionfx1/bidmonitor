@@ -31,11 +31,34 @@ const EMPTY_DATA: ImportedData = {
 // Chunk size for localStorage writes (avoid 5MB limit per key)
 const MAX_ROWS_INLINE = 50000;
 
+function migrateImportedData(data: ImportedData): ImportedData {
+  const voluumSource = data.meta.voluum?.source ?? '';
+  const isActiveApiImport = voluumSource.startsWith('voluum-api:last30/campaign:active:');
+  const hasFilterCounters = voluumSource.includes(':report=') && voluumSource.includes(':active=') && voluumSource.includes(':filtered=');
+
+  if (isActiveApiImport && !hasFilterCounters && data.voluum.length > 0) {
+    return {
+      ...data,
+      voluum: [],
+      meta: {
+        ...data.meta,
+        voluum: {
+          rows: 0,
+          importedAt: new Date().toISOString(),
+          source: `${voluumSource}:resync-required`,
+        },
+      },
+    };
+  }
+
+  return data;
+}
+
 export function loadData(): ImportedData {
   try {
     const raw = localStorage.getItem(DATA_KEY);
     if (!raw) return { ...EMPTY_DATA };
-    return { ...EMPTY_DATA, ...JSON.parse(raw) };
+    return migrateImportedData({ ...EMPTY_DATA, ...JSON.parse(raw) });
   } catch {
     return { ...EMPTY_DATA };
   }
