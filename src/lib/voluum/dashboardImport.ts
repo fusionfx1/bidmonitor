@@ -1,12 +1,19 @@
 import type { CampaignRow, Settings, VoluumMatchMode, VoluumRow } from '../../types';
 import type { AccountSourceScope } from '../accountSources';
-import { fetchVoluumReport, resolveDateRange } from './api';
+import { fetchVoluumCampaigns, fetchVoluumReport, resolveDateRange } from './api';
 import { normalizeRows } from './normalize';
-import type { NormalizedVoluumRow } from './types';
+import type { NormalizedVoluumRow, VoluumCampaignMeta } from './types';
 
 interface DashboardVoluumContext {
   campaigns?: CampaignRow[];
   settings?: Settings;
+}
+
+interface ActiveCampaignIndex {
+  loaded: boolean;
+  count: number;
+  ids: Set<string>;
+  names: Set<string>;
 }
 
 function norm(value: string): string {
@@ -15,6 +22,50 @@ function norm(value: string): string {
 
 function compactDigits(value: string): string {
   return value.replace(/\D+/g, '');
+}
+
+function safeString(value: unknown): string {
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
+function campaignMetaRows(payload: { rows?: VoluumCampaignMeta[]; campaigns?: VoluumCampaignMeta[]; items?: VoluumCampaignMeta[]; data?: VoluumCampaignMeta[] }): VoluumCampaignMeta[] {
+  return payload.rows ?? payload.campaigns ?? payload.items ?? payload.data ?? [];
+}
+
+function campaignMetaId(row: VoluumCampaignMeta): string {
+  return safeString(row.id || row.campaignId || row.campaign?.id);
+}
+
+function campaignMetaName(row: VoluumCampaignMeta): string {
+  return safeString(row.name || row.campaignName || row.campaign?.name);
+}
+
+async function fetchActiveCampaignIndex(): Promise<ActiveCampaignIndex> {
+  try {
+    const response = await fetchVoluumCampaigns('active');
+    const rows = campaignMetaRows(response);
+    return {
+      loaded: true,
+      count: rows.length,
+      ids: new Set(rows.map((row) => compactDigits(campaignMetaId(row))).filter(Boolean)),
+      names: new Set(rows.map((row) => norm(campaignMetaName(row))).filter(Boolean)),
+    };
+  } catch (e) {
+    console.warn('[BitMonitor] Active Voluum campaign metadata unavailable; using report rows:', e);
+    return { loaded: false, count: 0, ids: new Set(), names: new Set() };
+  }
+}
+
+function filterByActiveCampaigns(rows: NormalizedVoluumRow[], active: ActiveCampaignIndex): NormalizedVoluumRow[] {
+  if (!active.loaded) return rows;
+  return rows.filter((row) => {
+    const rowId = compactDigits(row.campaignId);
+    const rowName = norm(row.campaignName);
+    return Boolean(
+      (rowId && active.ids.has(rowId))
+      || (rowName && active.names.has(rowName))
+    );
+  });
 }
 
 function campaignMatches(row: NormalizedVoluumRow, campaign: CampaignRow): boolean {
@@ -38,12 +89,9 @@ function filterByCampaigns(
   const matched = rows.filter((row) => campaigns.some((campaign) => campaignMatches(row, campaign)));
   if (matched.length > 0) return matched;
 
-  // Single-campaign accounts commonly have Voluum campaign names that do not contain
-  // the Google Ads campaign ID. Keep rows in auto mode so the account still gets a
-  // usable dashboard, but strict mode stays fail-closed.
-  const uniqueGoogleCampaigns = new Set(campaigns.map((campaign) => campaign.campaign_id).filter(Boolean));
-  if (matchMode === 'auto' && uniqueGoogleCampaigns.size <= 1) return rows;
-  return [];
+  // auto mode keeps active Voluum rows when Google Ads campaign names/IDs cannot be matched.
+  // strict mode stays fail-closed for accounts that require explicit Google↔Voluum matching.
+  return matchMode === 'auto' ? rows : [];
 }
 
 function filterByConfiguredName(rows: NormalizedVoluumRow[], campaignFilter: string): NormalizedVoluumRow[] {
@@ -65,22 +113,26 @@ export async function fetchVoluumRowsForDashboard(
 ): Promise<VoluumRow[]> {
   const settings = context.settings;
   const { from, to } = resolveDateRange('last30');
-  const raw = await fetchVoluumReport({
-    from,
-    to,
-    groupBy: 'campaign',
-    limit: 250,
-    sort: 'conversions',
-    direction: 'desc',
-    ...(settings?.voluum_campaign_filter ? { campaignName: settings.voluum_campaign_filter } : {}),
-  });
+  const [raw, activeCampaigns] = await Promise.all([
+    fetchVoluumReport({
+      from,
+      to,
+      groupBy: 'campaign',
+      limit: 250,
+      sort: 'conversions',
+      direction: 'desc',
+      ...(settings?.voluum_campaign_filter ? { campaignName: settings.voluum_campaign_filter } : {}),
+    }),
+    fetchActiveCampaignIndex(),
+  ]);
 
   const dateRange = `${from.slice(0, 10)} / ${to.slice(0, 10)}`;
   const reportDate = to.slice(0, 10);
   const normalized = normalizeRows(raw.rows ?? [], dateRange)
     .filter((row) => row.visits > 0 || row.clicks > 0 || row.conversions > 0 || row.revenue !== 0 || row.profit !== 0);
 
-  const nameFiltered = filterByConfiguredName(normalized, settings?.voluum_campaign_filter ?? '');
+  const activeOnly = filterByActiveCampaigns(normalized, activeCampaigns);
+  const nameFiltered = filterByConfiguredName(activeOnly, settings?.voluum_campaign_filter ?? '');
   const accountFiltered = filterByCampaigns(
     nameFiltered,
     context.campaigns ?? [],
