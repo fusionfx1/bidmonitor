@@ -11,6 +11,12 @@ export interface LiveApiImportStatus {
   source: string;
   sourceLabel: string;
   status: 'synced' | 'fallback' | 'missing';
+  reportRows: number | null;
+  activeCampaignRows: number | null;
+  filteredInactiveRows: number | null;
+  activeMetadataRows: number | null;
+  allMetadataRows: number | null;
+  metadataLoaded: boolean;
 }
 
 export function isLiveApiKey(key: DataTableKey): boolean {
@@ -27,14 +33,25 @@ export function sourceTabName(source?: string): string | null {
   return parts[parts.length - 1] || null;
 }
 
+function readNumber(source: string, key: string): number | null {
+  const part = source.split(':').find((item) => item.startsWith(`${key}=`));
+  if (!part) return null;
+  const value = Number(part.slice(key.length + 1));
+  return Number.isFinite(value) ? value : null;
+}
+
+function readBoolean(source: string, key: string): boolean {
+  const part = source.split(':').find((item) => item.startsWith(`${key}=`));
+  return part === `${key}=1` || part === `${key}=true`;
+}
+
 function voluumSourceLabel(source: string, isApi: boolean): string {
   if (!source) return 'Not imported yet';
   if (!isApi) return 'Google Sheet fallback / voluum_performance';
-  const activeLabel = source.includes(':active') ? ' / active only' : '';
+  const activeLabel = source.includes(':active:') ? ' / active only' : '';
+  const matchLabel = source.includes(':strict:') ? 'strict match' : source.includes(':all:') ? 'all rows' : 'auto match';
   if (source.includes('empty-or-filtered')) return `Voluum API / last30 / campaign${activeLabel} / empty or filtered`;
-  if (source.includes('strict')) return `Voluum API / last30 / campaign${activeLabel} / strict match`;
-  if (source.includes('all')) return `Voluum API / last30 / campaign${activeLabel} / all rows`;
-  return `Voluum API / last30 / campaign${activeLabel} / auto match`;
+  return `Voluum API / last30 / campaign${activeLabel} / ${matchLabel}`;
 }
 
 export function getVoluumLiveImportStatus(data: ImportedData): LiveApiImportStatus {
@@ -54,5 +71,11 @@ export function getVoluumLiveImportStatus(data: ImportedData): LiveApiImportStat
     source,
     sourceLabel: voluumSourceLabel(source, isApi),
     status: hasApiRows ? 'synced' : !isApi && source ? 'fallback' : 'missing',
+    reportRows: readNumber(source, 'report'),
+    activeCampaignRows: readNumber(source, 'active'),
+    filteredInactiveRows: readNumber(source, 'filtered'),
+    activeMetadataRows: readNumber(source, 'metaActive'),
+    allMetadataRows: readNumber(source, 'metaAll'),
+    metadataLoaded: readBoolean(source, 'metaLoaded'),
   };
 }
