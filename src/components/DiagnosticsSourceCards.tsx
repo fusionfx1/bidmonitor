@@ -24,6 +24,10 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return <div className="flex items-center justify-between border-b border-gray-50 py-1 last:border-0"><span className="w-36 flex-shrink-0 text-xs text-gray-500">{label}</span><div className="text-right">{children}</div></div>;
 }
 
+function CountValue({ value }: { value: number | null }) {
+  return <span className={value !== null ? 'font-medium text-gray-800' : 'text-gray-400'}>{value !== null ? value.toLocaleString() : '—'}</span>;
+}
+
 function sheetTabs() {
   return SHEET_TABS.filter((tab) => !isLiveApiKey(tab.key));
 }
@@ -74,15 +78,25 @@ export function DiagnosticsSourceCards({
   const syncedSheetTabs = tabs.filter((tab) => resultMap[tab.key]?.status === 'synced' || data.meta[tab.key]).length;
   const hasVoluumRows = voluumImport.status === 'synced';
   const scriptTone: Tone = scriptHealth.freshnessStatus === 'OK' ? 'green' : scriptHealth.freshnessStatus === 'STALE' ? 'amber' : scriptHealth.freshnessStatus === 'ERROR' ? 'red' : 'gray';
+  const voluumAction = voluumHealth?.connected
+    ? <Pill tone="green" icon={Wifi} label="Connected" />
+    : voluumError
+    ? <Pill tone="red" icon={WifiOff} label="Error" />
+    : hasVoluumRows
+    ? <Pill tone="green" icon={Database} label="Imported" />
+    : <Pill tone="gray" icon={Clock} label="Not checked" />;
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <Card>
-        <CardHeader title="Voluum API" actions={voluumHealth?.connected ? <Pill tone="green" icon={Wifi} label="Connected" /> : voluumError ? <Pill tone="red" icon={WifiOff} label="Error" /> : <Pill tone="gray" icon={Clock} label="Not checked" />} />
+        <CardHeader title="Voluum API" actions={voluumAction} />
         <CardBody className="space-y-2 text-sm">
           {voluumError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{voluumError}</div>}
-          <Row label="Connection"><span className={voluumHealth?.connected ? 'font-medium text-emerald-600' : 'text-gray-400'}>{voluumHealth?.connected ? 'connected' : '—'}</span></Row>
+          <Row label="Connection"><span className={voluumHealth?.connected ? 'font-medium text-emerald-600' : hasVoluumRows ? 'text-gray-500' : 'text-gray-400'}>{voluumHealth?.connected ? 'connected' : hasVoluumRows ? 'not checked, import loaded' : '—'}</span></Row>
           <Row label="Dashboard import"><span className={hasVoluumRows ? 'font-medium text-emerald-600' : 'text-gray-400'}>{hasVoluumRows ? `${voluumImport.rows.toLocaleString()} rows` : 'not imported'}</span></Row>
+          <Row label="Report rows"><CountValue value={voluumImport.reportRows} /></Row>
+          <Row label="Active rows"><CountValue value={voluumImport.activeCampaignRows} /></Row>
+          <Row label="Filtered inactive"><CountValue value={voluumImport.filteredInactiveRows} /></Row>
           <Row label="Source"><span className="font-mono text-xs text-gray-600">{voluumImport.sourceLabel}</span></Row>
           <Row label="Last import"><span className="text-xs text-gray-500">{voluumImport.importedAt ? relativeTime(voluumImport.importedAt) : '—'}</span></Row>
         </CardBody>
@@ -112,6 +126,7 @@ export function DiagnosticsSourceCards({
         <CardBody className="space-y-2 text-sm">
           <Row label="Voluum report"><span className={hasVoluumRows ? 'font-medium text-emerald-600' : 'text-gray-400'}>{hasVoluumRows ? `${voluumImport.rows.toLocaleString()} rows` : 'not imported'}</span></Row>
           <Row label="Used by Overview"><span className={hasVoluumRows ? 'font-medium text-emerald-600' : 'text-gray-400'}>{hasVoluumRows ? 'yes' : 'no'}</span></Row>
+          <Row label="Active filter"><span className={hasVoluumRows ? 'font-medium text-emerald-600' : 'text-gray-400'}>{hasVoluumRows ? 'active campaigns only' : '—'}</span></Row>
         </CardBody>
       </Card>
     </div>
