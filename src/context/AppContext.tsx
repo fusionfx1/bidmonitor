@@ -3,6 +3,7 @@ import type { ImportedData, Settings, ApprovalStatus, DataTableKey, SyncState, T
 import { loadData, saveTableData, loadBidApprovals, saveBidApprovals, loadNegApprovals, saveNegApprovals } from '../store/dataStore';
 import { loadSettings, saveSettings } from '../store/settingsStore';
 import { SHEET_TABS, SHEET_PARSERS, extractSheetId, fetchTabAsCSV } from '../lib/googleSheets';
+import { GENERATED_SETTINGS_TAB, mergeGeneratedSheetSettings } from '../lib/generatedSheetAdapter';
 import { parseCSV } from '../lib/csv/parser';
 import { addActiveAccountScope, getActiveAccountScope, getActiveSpreadsheetId } from '../lib/accountSources';
 import { recordSyncRun } from '../lib/syncRuns';
@@ -69,8 +70,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const rawId = overrideSheetId ?? getActiveSpreadsheetId(settings);
     const sheetId = extractSheetId(rawId);
     if (!sheetId) return;
-    const syncScope = getActiveAccountScope(settings);
     const startedAt = new Date().toISOString();
+    let syncSettings = settings;
+    let isGeneratedBitMonitorSheet = false;
 
     setSyncState({
       running: true,
@@ -80,19 +82,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       })),
     });
 
+    try {
+      const generatedSettings = await fetchTabAsCSV(sheetId, GENERATED_SETTINGS_TAB);
+      isGeneratedBitMonitorSheet = Boolean(generatedSettings.csv && !generatedSettings.error);
+      if (generatedSettings.csv) {
+        const settingsRows = await parseCSV(generatedSettings.csv);
+        const mergedSettings = mergeGeneratedSheetSettings(syncSettings, settingsRows, sheetId, rawId);
+        syncSettings = mergedSettings;
+        if (JSON.stringify(mergedSettings) !== JSON.stringify(settings)) {
+          saveSettings(mergedSettings);
+          setSettings(mergedSettings);
+        }
+      }
+    } catch {
+      isGeneratedBitMonitorSheet = false;
+    }
+
+    const syncScope = getActiveAccountScope(syncSettings);
+
     const results: TabSyncResult[] = await Promise.all(
       SHEET_TABS.map(async (tab): Promise<TabSyncResult> => {
         const base = { key: tab.key, tabName: tab.tabName, label: tab.label, optional: tab.optional };
+        const aliases = tab.aliases ?? [];
+        const candidates = Array.from(new Set(
+          isGeneratedBitMonitorSheet
+            ? [...aliases, tab.tabName]
+            : [tab.tabName, ...aliases]
+        ));
         try {
-          const result = await fetchTabAsCSV(sheetId, tab.tabName);
-          if (result.error === 'private') return { ...base, status: 'private', error: result.message ?? undefined };
-          if (result.error === 'missing')  return { ...base, status: 'missing', error: result.message ?? undefined };
-          if (result.error || !result.csv) return { ...base, status: 'error',   error: result.message ?? 'Unknown error' };
+          let tabName = candidates[0];
+          let result = await fetchTabAsCSV(sheetId, tabName);
+          for (const candidate of candidates.slice(1)) {
+            if (result.error !== 'missing' && result.csv) break;
+            const nextResult = await fetchTabAsCSV(sheetId, candidate);
+            if (nextResult.error !== 'missing') {
+              tabName = candidate;
+              result = nextResult;
+            }
+          }
+
+          if (result.error === 'private') return { ...base, tabName, status: 'private', error: result.message ?? undefined };
+          if (result.error === 'missing')  return { ...base, tabName, status: 'missing', error: result.message ?? undefined };
+          if (result.error || !result.csv) return { ...base, tabName, status: 'error',   error: result.message ?? 'Unknown error' };
           const rawRows = await parseCSV(result.csv);
-          if (!rawRows.length) return { ...base, status: 'missing' };
-          const parsed = addActiveAccountScope(SHEET_PARSERS[tab.key](rawRows), settings);
-          saveTableData(tab.key, parsed, `sheet:${sheetId}/${tab.tabName}`);
-          return { ...base, status: 'synced', rows: parsed.length };
+          if (!rawRows.length) return { ...base, tabName, status: 'missing' };
+          const normalizedRows = tabName === tab.tabName ? rawRows : tab.normalizeRows?.(rawRows) ?? rawRows;
+          const parsed = addActiveAccountScope(SHEET_PARSERS[tab.key](normalizedRows), syncSettings);
+          saveTableData(tab.key, parsed, `sheet:${sheetId}/${tabName}`);
+          return { ...base, tabName, status: 'synced', rows: parsed.length };
         } catch (err) {
           return { ...base, status: 'error', error: String(err) };
         }
