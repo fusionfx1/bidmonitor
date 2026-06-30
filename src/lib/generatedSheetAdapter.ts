@@ -1,19 +1,21 @@
 import type { DataTableKey, Settings, SyncLogStatus } from '../types';
 import { makeAccountSource } from './accountSources';
+import { normalizeDateValue } from './dateUtils';
 
 export const GENERATED_SETTINGS_TAB = '_settings_global';
+export const GENERATED_DASHBOARD_SETTINGS_TAB = '_settings_dashboard';
 
 export const GENERATED_TAB_ALIASES: Partial<Record<DataTableKey, string[]>> = {
   campaigns: ['raw_campaign_daily'],
   adGroups: ['raw_ad_group_daily', 'raw_adgroup_daily'],
   keywords: ['raw_keyword_daily'],
-  searchTerms: ['raw_search_term_daily', 'raw_search_terms_daily'],
-  hourDevice: ['raw_hour_device_daily'],
-  policy: ['raw_policy_ad_daily', 'raw_policy_ads', 'raw_ads_policy'],
+  searchTerms: ['raw_search_terms_daily', 'raw_search_term_daily'],
+  hourDevice: ['raw_device_daily', 'raw_hour_device_daily'],
+  policy: ['raw_policy_ad_daily', 'raw_policy_daily', 'raw_ads_policy'],
   auctionCampaigns: ['raw_auction_campaign_daily', 'raw_auction_proxy_campaigns'],
   auctionKeywords: ['raw_auction_keyword_daily', 'raw_auction_proxy_keywords'],
   pmaxPerformance: ['raw_pmax_asset_group_daily', 'raw_pmax_performance'],
-  geoPerformance: ['raw_geo_performance', 'raw_geo_daily'],
+  geoPerformance: ['raw_geo_daily', 'raw_geo_performance'],
   placementPerformance: ['raw_placement_performance', 'raw_placement_daily'],
   voluum: ['raw_voluum_performance', 'raw_voluum_report'],
   syncLog: ['_sync_runs'],
@@ -63,6 +65,7 @@ function metricRows(rows: RawRow[]): RawRow[] {
 
     return {
       ...row,
+      date: normalizeDateValue(first(row, ['date', 'day', 'segments_date'])),
       campaign_name: first(row, ['campaign_name', 'campaign']),
       campaign_status: first(row, ['campaign_status', 'status']),
       channel: first(row, ['channel', 'advertising_channel_type']),
@@ -92,7 +95,7 @@ function keywordRows(rows: RawRow[]): RawRow[] {
 function voluumRows(rows: RawRow[]): RawRow[] {
   return rows.map((row) => ({
     ...row,
-    date: first(row, ['date', 'visit_date_bkk', 'postback_date_bkk', 'profit_date_bkk']),
+    date: normalizeDateValue(first(row, ['date', 'visit_date_bkk', 'postback_date_bkk', 'profit_date_bkk'])),
     keyword_key: first(row, ['keyword_key', 'keyword', 'custom_variable_1', 'var1']),
     campaign_id: first(row, ['campaign_id', 'voluum_campaign_id', 'campaign']),
     ad_group_id: first(row, ['ad_group_id', 'adgroup_id']),
@@ -162,13 +165,17 @@ export function normalizeGeneratedRows(key: DataTableKey, rows: RawRow[]): RawRo
   return rows;
 }
 
+function settingsObject(rows: RawRow[]): Record<string, string> {
+  return Object.fromEntries(rows.map((row) => [str(row.key), str(row.value)]));
+}
+
 export function mergeGeneratedSheetSettings(
   current: Settings,
   settingsRows: RawRow[],
   spreadsheetId: string,
   rawSheetInput: string
 ): Settings {
-  const values = Object.fromEntries(settingsRows.map((row) => [str(row.key), str(row.value)]));
+  const values = settingsObject(settingsRows);
   const accountId = values.account_id || values.customer_id;
   const customerId = values.customer_id || values.account_id;
 
@@ -198,5 +205,24 @@ export function mergeGeneratedSheetSettings(
     sheet_id: spreadsheetId,
     account_sources: sources,
     selected_account_source_id: source.id,
+  };
+}
+
+export function mergeGeneratedDashboardSettings(current: Settings, settingsRows: RawRow[]): Settings {
+  const values = settingsObject(settingsRows);
+  const accountName = values.DASHBOARD_ACCOUNT_NAME || values.dashboard_account_name;
+
+  const nextSources = accountName
+    ? current.account_sources.map((source) => source.id === current.selected_account_source_id
+      ? { ...source, account_name: accountName }
+      : source)
+    : current.account_sources;
+
+  return {
+    ...current,
+    account_sources: nextSources,
+    voluum_campaign_filter: values.VOLUUM_CAMPAIGN_FILTER || values.voluum_campaign_filter || current.voluum_campaign_filter,
+    voluum_conversion_metric: values.VOLUUM_CONVERSION_METRIC || values.voluum_conversion_metric || current.voluum_conversion_metric,
+    voluum_match_mode: values.VOLUUM_MATCH_MODE || values.voluum_match_mode || current.voluum_match_mode,
   };
 }
