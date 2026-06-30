@@ -92,10 +92,10 @@ export type AccountScopedRow = {
   source_sheet_id?: string;
 };
 
-export function addActiveAccountScope<T extends object>(rows: T[], settings: Settings): (T & AccountScopedRow)[] {
+export function addActiveAccountScope<T>(rows: T[], settings: Settings): (T & AccountScopedRow)[] {
   const scope = getActiveAccountScope(settings);
   if (!scope) return rows as (T & AccountScopedRow)[];
-  return rows.map((row) => ({ ...row, ...scope }));
+  return rows.map((row) => ({ ...(row as object), ...scope }) as T & AccountScopedRow);
 }
 
 export function asAccountSourceScope(settings: Settings): AccountSourceScope | null {
